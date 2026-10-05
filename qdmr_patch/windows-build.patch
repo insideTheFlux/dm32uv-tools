@@ -1,0 +1,31 @@
+diff --git a/cli/CMakeLists.txt b/cli/CMakeLists.txt
+index 14de913..16e43e9 100644
+--- a/cli/CMakeLists.txt
++++ b/cli/CMakeLists.txt
+@@ -1,4 +1,5 @@
+-qt_add_executable(dmrconf WIN32
++# No WIN32 keyword here: dmrconf is a console tool and needs a console subsystem.
++qt_add_executable(dmrconf
+   main.cc
+   printprogress.cc printprogress.hh
+   detect.cc detect.hh
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index c4ef2ff..195ca27 100644
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -8,7 +8,14 @@ ENDIF(APPLE)
+ 
+ configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+ 
+-qt_add_library(libdmrconf SHARED
++# On Windows (MinGW) build the core library statically: it has no DLL export macros.
++if(WIN32)
++  set(DMRCONF_LIB_TYPE STATIC)
++else()
++  set(DMRCONF_LIB_TYPE SHARED)
++endif()
++
++qt_add_library(libdmrconf ${DMRCONF_LIB_TYPE}
+   ${hid_SOURCES}
+   ${CMAKE_CURRENT_BINARY_DIR}/config.h
+   utils.cc crc32.cc addressmap.cc radiointerface.cc errorstack.cc frequency.cc interval.cc

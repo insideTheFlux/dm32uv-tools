@@ -1,0 +1,1578 @@
+diff --git a/cli/writecodeplug.cc b/cli/writecodeplug.cc
+index 70847de..ad25f12 100644
+--- a/cli/writecodeplug.cc
++++ b/cli/writecodeplug.cc
+@@ -76,6 +76,9 @@ int writeCodeplug(QCommandLineParser &parser, QCoreApplication &app) {
+   if (! parser.isSet("verbose")) {
+     showProgress();
+     QObject::connect(radio, &Radio::downloadProgress, updateProgress);
++    // Without this the bar stays empty during an upload: the DM-32UV reports 0-50% while it reads
++    // the radio's current codeplug and 50-100% while it writes.
++    QObject::connect(radio, &Radio::uploadProgress, updateProgress);
+   }
+ 
+   Codeplug::Flags flags;
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index c4ef2ff..74ceeb7 100644
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -47,7 +47,7 @@ qt_add_library(libdmrconf SHARED
+   dmr6x2uv2.cc dmr6x2uv2_codeplug.cc dmr6x2uv2_limits.cc
+   auctus_a6_interface.cc
+   dr1801uv.cc dr1801uv_interface.cc dr1801uv_codeplug.cc dr1801uv_filereader.cc dr1801uv_limits.cc
+-  dm32uv.cc dm32uv_interface.cc dm32uv_limits.cc dm32uv_codeplug.cc dm32uv_callsigndb.cc
++  dm32uv.cc dm32uv_interface.cc dm32uv_limits.cc dm32uv_codeplug.cc dm32uv_callsigndb.cc dm32uv_extension.cc
+         task_progress.cc
+         task_progress.hh)
+ 
+@@ -91,7 +91,7 @@ target_sources(libdmrconf PUBLIC FILE_SET HEADERS
+   dmr6x2uv2.hh dmr6x2uv2_codeplug.hh dmr6x2uv2_limits.hh
+   auctus_a6_interface.hh
+   dr1801uv.hh dr1801uv_interface.hh dr1801uv_codeplug.hh dr1801uv_filereader.hh dr1801uv_limits.hh
+-  dm32uv.hh dm32uv_interface.hh dm32uv_limits.hh dm32uv_codeplug.hh dm32uv_callsigndb.hh)
++  dm32uv.hh dm32uv_interface.hh dm32uv_limits.hh dm32uv_codeplug.hh dm32uv_callsigndb.hh dm32uv_extension.hh)
+ 
+ 
+ set_target_properties(libdmrconf PROPERTIES
+diff --git a/lib/dm32uv_codeplug.cc b/lib/dm32uv_codeplug.cc
+index c3abd38..045bfc1 100644
+--- a/lib/dm32uv_codeplug.cc
++++ b/lib/dm32uv_codeplug.cc
+@@ -1,4 +1,6 @@
+ #include "dm32uv_codeplug.hh"
++#include "dm32uv_extension.hh"
++#include <memory>
+ #include "intermediaterepresentation.hh"
+ #include "config.hh"
+ #include "logger.hh"
+@@ -3353,6 +3355,158 @@ DM32UVCodeplug::GeneralSettingsElement::setDMRMicLevel(Level level) {
+ }
+ 
+ 
++namespace {
++/** Converts a raw value into an enum value, or returns the fallback if the raw value is not
++ * in the known range [0, max]. */
++template <class E>
++E enumFromRaw(unsigned int raw, unsigned int max, E fallback) {
++  return (raw <= max) ? static_cast<E>(raw) : fallback;
++}
++}
++
++DM32UVSettingsExtension *
++DM32UVCodeplug::GeneralSettingsElement::extension() const {
++  typedef DM32UVSettingsExtension Ext;
++  Ext *e = new Ext();
++
++  e->setAutoPowerOff(enumFromRaw(getUInt8(Offset::autoPowerOffDelay()), 5, Ext::AutoPowerOff::Off));
++  e->setFMRogerTone(enumFromRaw(getUInt2(Offset::fmRogerTone()), 2, Ext::FMRogerTone::Off));
++  e->enableGroupCallTone(groupCallToneEnabled());
++  e->enableLowBatteryTone(lowBatteryToneEnabled());
++  e->enableShowVolumeChange(showVolmueChange());
++  e->enableShowClock(showClock());
++  e->setDateFormat(getBit(Offset::dateFormat()) ? Ext::DateFormat::DayMonthYear : Ext::DateFormat::YearMonthDay);
++  e->setBacklightDuration(enumFromRaw(getUInt8(Offset::backlightDuration()), 11, Ext::BacklightDuration::Sec5));
++  e->setCallColor(enumFromRaw(getUInt8(Offset::callColor()), 7, Ext::Color::Cyan));
++  e->setStandbyColor(enumFromRaw(getUInt8(Offset::standbyColor()), 7, Ext::Color::Green));
++  e->setChannelNameAColor(enumFromRaw(getUInt8(Offset::channelNameAColor()), 7, Ext::Color::Orange));
++  e->setChannelNameBColor(enumFromRaw(getUInt8(Offset::channelNameBColor()), 7, Ext::Color::Yellow));
++  e->setZoneNameAColor(enumFromRaw(getUInt8(Offset::zoneNameAColor()), 7, Ext::Color::Blue));
++  e->setZoneNameBColor(enumFromRaw(getUInt8(Offset::zoneNameBColor()), 7, Ext::Color::Red));
++  e->setPositionFormat(getBit(Offset::positionFormat())
++                       ? Ext::PositionFormat::DegreesMinutesSeconds : Ext::PositionFormat::DecimalDegrees);
++  e->enableRecording(recordingEnabled());
++  e->setRecordMode(enumFromRaw(getUInt2(Offset::recordMode()), 2, Ext::RecordMode::Receive));
++  if (Limit::activeRetires().in(getUInt8(Offset::activeReties())))
++    e->setActiveRetries(getUInt8(Offset::activeReties()));
++  e->enableRadioDisableDecode(dmrRemoteKillEnabled());
++  e->enableRemoteMonitorDecode(dmrRemoteMonitorEnabled());
++  e->enableCallAlertDecode(dmrRXAlertEnabled());
++  e->enableRadioEnableDecode(dmrRemoteReenableEnabled());
++  e->enableRadioCheckDecode(dmrRemoteRadioCheckEnabled());
++  e->enableMissedCallAlert(missedCallNotificationEnabled());
++  e->enableOnlyChannelMode(vfoModeDisabled());
++  e->setDisplayModeA(getBit(Offset::displayModeA()) ? Ext::DisplayMode::ChannelName : Ext::DisplayMode::Frequency);
++  e->setDisplayModeB(getBit(Offset::displayModeB()) ? Ext::DisplayMode::ChannelName : Ext::DisplayMode::Frequency);
++  e->setDualWatchMode(enumFromRaw(getUInt2(Offset::dualStandbyMode()), 2, Ext::DualWatchMode::DoubleStandby));
++  e->disableAllLEDs(allLEDsDisabled());
++  e->enableWeatherAlarm(weatherAlarmEnabled());
++  e->setPowerSave(enumFromRaw(getUInt2(Offset::powerSaveMode()), 3, Ext::PowerSave::Off));
++  e->setTailNoiseReduction(enumFromRaw(getUInt2(Offset::steMode()), 3, Ext::TailNoiseReduction::Off));
++  e->setTBST(enumFromRaw(getUInt2(Offset::tbstFrequency()), 3, Ext::TBST::Hz1750));
++
++  // Step 2: the manufacturer's CPS shows raw 0..25 as UTC-12..UTC+13, raw 5..255 as seconds,
++  // raw 0..5 as brightness 1..6 and raw 1..151 as 300..4800 ms in steps of 30 ms.
++  unsigned int zone = getUInt8(Offset::timeZone());
++  if (zone <= 25)
++    e->setUTCOffset((int)zone - 12);
++  unsigned int interval = getUInt8(Offset::posUpdatePeriod());
++  if (interval >= 5)
++    e->setGPSIntervalSeconds(interval);
++  unsigned int brightness = getUInt8(Offset::displayBrightness());
++  if (brightness <= 5)
++    e->setBacklightBrightness(brightness + 1);
++  unsigned int wait = getUInt8(Offset::activeWaitTime());
++  if ((wait >= 1) && (wait <= 151))
++    e->setActiveWaitTimeMs((wait-1)*30 + 300);
++  return e;
++}
++
++void
++DM32UVCodeplug::GeneralSettingsElement::applyExtension(const DM32UVSettingsExtension *ext) {
++  typedef DM32UVSettingsExtension Ext;
++  if (nullptr == ext)
++    return;
++  // What the radio holds now, in the same representation as the extension.
++  std::unique_ptr<Ext> cur(extension());
++
++  if (ext->autoPowerOff() != cur->autoPowerOff())
++    setUInt8(Offset::autoPowerOffDelay(), (unsigned int)ext->autoPowerOff());
++  if (ext->fmRogerTone() != cur->fmRogerTone())
++    setUInt2(Offset::fmRogerTone(), (unsigned int)ext->fmRogerTone());
++  if (ext->groupCallTone() != cur->groupCallTone())
++    enableGroupCallTone(ext->groupCallTone());
++  if (ext->lowBatteryTone() != cur->lowBatteryTone())
++    enableLowBatteryTone(ext->lowBatteryTone());
++  if (ext->showVolumeChange() != cur->showVolumeChange())
++    enableShowVolumeChange(ext->showVolumeChange());
++  if (ext->showClock() != cur->showClock())
++    enableShowClock(ext->showClock());
++  if (ext->dateFormat() != cur->dateFormat())
++    setBit(Offset::dateFormat(), Ext::DateFormat::DayMonthYear == ext->dateFormat());
++  if (ext->backlightDuration() != cur->backlightDuration())
++    setUInt8(Offset::backlightDuration(), (unsigned int)ext->backlightDuration());
++  if (ext->callColor() != cur->callColor())
++    setUInt8(Offset::callColor(), (unsigned int)ext->callColor());
++  if (ext->standbyColor() != cur->standbyColor())
++    setUInt8(Offset::standbyColor(), (unsigned int)ext->standbyColor());
++  if (ext->channelNameAColor() != cur->channelNameAColor())
++    setUInt8(Offset::channelNameAColor(), (unsigned int)ext->channelNameAColor());
++  if (ext->channelNameBColor() != cur->channelNameBColor())
++    setUInt8(Offset::channelNameBColor(), (unsigned int)ext->channelNameBColor());
++  if (ext->zoneNameAColor() != cur->zoneNameAColor())
++    setUInt8(Offset::zoneNameAColor(), (unsigned int)ext->zoneNameAColor());
++  if (ext->zoneNameBColor() != cur->zoneNameBColor())
++    setUInt8(Offset::zoneNameBColor(), (unsigned int)ext->zoneNameBColor());
++  if (ext->positionFormat() != cur->positionFormat())
++    setBit(Offset::positionFormat(), Ext::PositionFormat::DegreesMinutesSeconds == ext->positionFormat());
++  if (ext->recordingEnabled() != cur->recordingEnabled())
++    enableRecording(ext->recordingEnabled());
++  if (ext->recordMode() != cur->recordMode())
++    setUInt2(Offset::recordMode(), (unsigned int)ext->recordMode());
++  if (ext->activeRetries() != cur->activeRetries())
++    setUInt8(Offset::activeReties(), Limit::activeRetires().limit(ext->activeRetries()));
++  if (ext->radioDisableDecode() != cur->radioDisableDecode())
++    enableDMRRemoteKill(ext->radioDisableDecode());
++  if (ext->remoteMonitorDecode() != cur->remoteMonitorDecode())
++    enableDMRRemoteMonitor(ext->remoteMonitorDecode());
++  if (ext->callAlertDecode() != cur->callAlertDecode())
++    enableDMRRXAlert(ext->callAlertDecode());
++  if (ext->radioEnableDecode() != cur->radioEnableDecode())
++    enableDMRRemoteReenable(ext->radioEnableDecode());
++  if (ext->radioCheckDecode() != cur->radioCheckDecode())
++    enableDMRRemoteRadioCheck(ext->radioCheckDecode());
++  if (ext->missedCallAlert() != cur->missedCallAlert())
++    enableMissedCallNotification(ext->missedCallAlert());
++  if (ext->onlyChannelMode() != cur->onlyChannelMode())
++    disableVFOMode(ext->onlyChannelMode());
++  if (ext->displayModeA() != cur->displayModeA())
++    setBit(Offset::displayModeA(), Ext::DisplayMode::ChannelName == ext->displayModeA());
++  if (ext->displayModeB() != cur->displayModeB())
++    setBit(Offset::displayModeB(), Ext::DisplayMode::ChannelName == ext->displayModeB());
++  if (ext->dualWatchMode() != cur->dualWatchMode())
++    setUInt2(Offset::dualStandbyMode(), (unsigned int)ext->dualWatchMode());
++  if (ext->allLEDsDisabled() != cur->allLEDsDisabled())
++    disableAllLEDs(ext->allLEDsDisabled());
++  if (ext->weatherAlarm() != cur->weatherAlarm())
++    enableWeatherAlarm(ext->weatherAlarm());
++  if (ext->powerSave() != cur->powerSave())
++    setUInt2(Offset::powerSaveMode(), (unsigned int)ext->powerSave());
++  if (ext->tailNoiseReduction() != cur->tailNoiseReduction())
++    setUInt2(Offset::steMode(), (unsigned int)ext->tailNoiseReduction());
++  if (ext->tbst() != cur->tbst())
++    setUInt2(Offset::tbstFrequency(), (unsigned int)ext->tbst());
++
++  if (ext->utcOffset() != cur->utcOffset())
++    setUInt8(Offset::timeZone(), (unsigned int)(ext->utcOffset() + 12));
++  if (ext->gpsIntervalSeconds() != cur->gpsIntervalSeconds())
++    setUInt8(Offset::posUpdatePeriod(), ext->gpsIntervalSeconds());
++  if (ext->backlightBrightness() != cur->backlightBrightness())
++    setUInt8(Offset::displayBrightness(), ext->backlightBrightness() - 1);
++  if (ext->activeWaitTimeMs() != cur->activeWaitTimeMs())
++    setUInt8(Offset::activeWaitTime(), (ext->activeWaitTimeMs() - 300)/30 + 1);
++}
++
+ bool
+ DM32UVCodeplug::GeneralSettingsElement::decode(Context &ctx, const ErrorStack &err) {
+   Q_UNUSED(err);
+@@ -3399,6 +3553,9 @@ DM32UVCodeplug::GeneralSettingsElement::decode(Context &ctx, const ErrorStack &e
+   ctx.config()->settings()->dmr()->setTalkerAliasEncoding(talkerAliasEncoding());
+   ctx.config()->settings()->dmr()->setPreamble(dmrPreambleDuration());
+ 
++  // Settings stored in the radio that are not part of the common settings
++  ctx.config()->settings()->setDM32UVExtension(extension());
++
+   return true;
+ }
+ 
+@@ -3445,7 +3602,10 @@ DM32UVCodeplug::GeneralSettingsElement::encode(Context &ctx, const ErrorStack &e
+   if (ctx.config()->smsExtension())
+     setSMSFormat(ctx.config()->smsExtension()->format());
+ 
+-  setGNSS(ctx.config()->settings()->gnss()->systems());
++  // The GPS mode is only written for configurations that carry the dm32uv section. Older YAML
++  // files hold the mode as read from the wrong bits, and writing it would change the radio.
++  if (ctx.config()->settings()->dm32uvExtension())
++    setGNSS(ctx.config()->settings()->gnss()->systems());
+ 
+   enablePrivateCallMatch(ctx.config()->settings()->dmr()->privateCallMatchEnabled());
+   enableGroupCallMatch(ctx.config()->settings()->dmr()->groupCallMatchEnabled());
+@@ -3454,6 +3614,10 @@ DM32UVCodeplug::GeneralSettingsElement::encode(Context &ctx, const ErrorStack &e
+   setTalkerAliasEncoding(ctx.config()->settings()->dmr()->talkerAliasEncoding());
+   setDmrPreambleDuration(ctx.config()->settings()->dmr()->preamble());
+ 
++  // Extension settings: only fields that differ from the radio's current values are written
++  if (ctx.config()->settings()->dm32uvExtension())
++    applyExtension(ctx.config()->settings()->dm32uvExtension());
++
+   return true;
+ }
+ 
+@@ -3982,12 +4146,124 @@ DM32UVCodeplug::EncryptionKeyBankElement::encode(Context &ctx, const ErrorStack
+  * Implementation of DM32UVCodeplug
+  * ******************************************************************************************** */
+ DM32UVCodeplug::DM32UVCodeplug(QObject *parent)
+-  : Codeplug{parent}
++  : Codeplug{parent}, _previous(nullptr)
+ {
+   addImage("Baofeng DM32UV Codeplug");
+ }
+ 
+ 
++/* ******************************************************************************************** *
++ * Keeping what the user did not change when the radio's codeplug is updated
++ * ******************************************************************************************** */
++struct DM32UVCodeplug::Previous {
++  /** The radio's current codeplug, decoded. */
++  Config config;
++  /** The index tables made while decoding. They number every object like the radio does (by its
++   * slot), not like a configuration that is encoded anew. Encoding an old object with them gives
++   * back the bits that are in the radio. */
++  std::unique_ptr<Context> ctx;
++  /** Index tables numbered like a configuration that is encoded anew (see index()). The settings
++   * elements are encoded with these, because that is what the new configuration gets too. Settings
++   * QDMR cannot encode from such tables (the APRS system, for instance) then come out equal for the
++   * previous and the new configuration and stay as they are in the radio. */
++  std::unique_ptr<Context> ictx;
++  /** The raw channel records by channel index. */
++  std::vector<std::vector<uint8_t>> channels;
++  /** The raw channel extension records (TX contact) by channel index. */
++  std::vector<std::vector<uint8_t>> extensions;
++  /** Marks previous channels that are already assigned to a channel of the new configuration. */
++  std::vector<bool> used;
++};
++
++DM32UVCodeplug::Previous *
++DM32UVCodeplug::capturePrevious(const ErrorStack &err) {
++  Q_UNUSED(err)
++  if (! isAllocated(Offset::channelBanks()))
++    return nullptr;
++
++  std::unique_ptr<Previous> prev(new Previous());
++  ErrorStack e;
++  prev->ctx.reset(new Context(&prev->config));
++  prev->ctx->remTable(&BasicEncryptionKey::staticMetaObject, true);
++  prev->ctx->remTable(&ARC4EncryptionKey::staticMetaObject, true);
++  prev->ctx->remTable(&AESEncryptionKey::staticMetaObject, true);
++  prev->ctx->addTable(&EncryptionKey::staticMetaObject);
++  if (! decodeElements(*prev->ctx, e)) {
++    logDebug() << "Cannot decode the current codeplug: " << e.format();
++    return nullptr;
++  }
++  if (! linkElements(*prev->ctx, e)) {
++    logDebug() << "Cannot link the current codeplug: " << e.format();
++    return nullptr;
++  }
++
++  prev->ictx.reset(new Context(&prev->config));
++  prev->ictx->remTable(&BasicEncryptionKey::staticMetaObject, true);
++  prev->ictx->remTable(&ARC4EncryptionKey::staticMetaObject, true);
++  prev->ictx->remTable(&AESEncryptionKey::staticMetaObject, true);
++  prev->ictx->addTable(&EncryptionKey::staticMetaObject);
++  if (! index(&prev->config, *prev->ictx, e)) {
++    logDebug() << "Cannot index the current codeplug: " << e.format();
++    prev->ictx.reset();   // settings are then encoded as before
++  }
++
++  // Copy the raw records of all channels before anything is overwritten.
++  unsigned int n = prev->config.channelList()->count();
++  for (unsigned int i=0; i<n; i++) {
++    unsigned int blockNumber  = ChannelBankElement::channelBank(i);
++    unsigned int indexInBlock = ChannelBankElement::indexInBank(i);
++    uint32_t addr = Offset::channelBanks()
++                    + (0 == blockNumber ? ChannelBankElement::Offset::channelBlock0()
++                                        : blockNumber * ChannelBankElement::Offset::betweenChannelBlocks())
++                    + indexInBlock * ChannelElement::size();
++    if (! isAllocated(addr))
++      return nullptr;
++    uint8_t *rec = data(addr);
++    prev->channels.emplace_back(rec, rec + ChannelElement::size());
++
++    unsigned int extBlock = i / ChannelExtensionBankElement::Limit::count();
++    unsigned int extIndex = i % ChannelExtensionBankElement::Limit::count();
++    uint32_t extAddr = Offset::channelExtensionBanks()
++                       + extBlock * ChannelExtensionBankElement::Offset::betweenBanks()
++                       + extIndex * ChannelExtensionElement::size();
++    if (! isAllocated(extAddr))
++      return nullptr;
++    uint8_t *ext = data(extAddr);
++    prev->extensions.emplace_back(ext, ext + ChannelExtensionElement::size());
++  }
++  prev->used.assign(n, false);
++  return prev.release();
++}
++
++bool
++DM32UVCodeplug::encodeKeepingUnchanged(
++    uint32_t offset, size_t size,
++    const std::function<bool(uint8_t *, Context &, const ErrorStack &)> &fn,
++    Context &ctx, const ErrorStack &err)
++{
++  if ((nullptr == _previous) || (! _previous->ictx))
++    return fn(data(offset), ctx, err);
++
++  // Encode the new and the previous configuration into copies of what the radio holds now. Bits
++  // that come out equal in both were not changed by the user, whatever QDMR makes of them. They
++  // keep the radio's value. (The copies are not empty buffers: encoders that write a value only if
++  // it differs from what is there, like the dm32uv extension, need the real content.)
++  uint8_t *real = data(offset);
++  std::vector<uint8_t> fresh(real, real + size), prior(real, real + size);
++  ErrorStack e;
++  if (! fn(fresh.data(), ctx, err))
++    return false;
++  if (! fn(prior.data(), *_previous->ictx, e))
++    return fn(data(offset), ctx, err);
++
++  for (size_t i=0; i<size; i++) {
++    uint8_t changed = fresh[i] ^ prior[i];
++    real[i] = (real[i] & ~changed) | (fresh[i] & changed);
++  }
++  return true;
++}
++
++
+ Config *
+ DM32UVCodeplug::preprocess(Config *config, const ErrorStack &err) const {
+   Config *copy = Codeplug::preprocess(config, err);
+@@ -4106,8 +4382,6 @@ DM32UVCodeplug::index(Config *config, Context &ctx, const ErrorStack &err) const
+ 
+ bool
+ DM32UVCodeplug::encode(Config *config, const Flags &flags, const ErrorStack &err) {
+-  Q_UNUSED(flags);
+-
+   Context ctx(config);
+   ctx.remTable(&BasicEncryptionKey::staticMetaObject, true);
+   ctx.remTable(&ARC4EncryptionKey::staticMetaObject, true);
+@@ -4118,6 +4392,20 @@ DM32UVCodeplug::encode(Config *config, const Flags &flags, const ErrorStack &err
+     return false;
+   }
+ 
++  // When updating the radio's codeplug, first read what is in it now, before anything is changed.
++  struct Release { Previous *&ptr; ~Release() { delete ptr; ptr = nullptr; } } release{_previous};
++  _previous = nullptr;
++  if (flags.updateCodeplug()) {
++    _previous = capturePrevious(err);
++    if (nullptr == _previous)
++      logWarn() << "Cannot decode the radio's current codeplug. It is written without keeping the "
++                   "settings that QDMR does not know.";
++    // A configuration without the dm32uv section must leave those settings alone. The previous
++    // configuration therefore has to be encoded without them as well.
++    if ((nullptr != _previous) && (nullptr == config->settings()->dm32uvExtension()))
++      _previous->config.settings()->setDM32UVExtension(nullptr);
++  }
++
+   if (! encodeElements(ctx, err)) {
+     errMsg(err) << "Cannot encode codeplug.";
+     return false;
+@@ -4307,11 +4595,17 @@ DM32UVCodeplug::encodeElements(Context &ctx, const ErrorStack &err) {
+ 
+   if (! image(0).isAllocated(Offset::generalSettings()))
+     image(0).addElement(Offset::generalSettings(), Limit::blockSize());
+-  if (! GeneralSettingsElement(data(Offset::generalSettings())).encode(ctx, err)) {
++  if (! encodeKeepingUnchanged(
++          Offset::generalSettings(), GeneralSettingsElement::size(),
++          [](uint8_t *p, Context &c, const ErrorStack &e) { return GeneralSettingsElement(p).encode(c, e); },
++          ctx, err)) {
+     errMsg(err) << "Cannot encode settings.";
+     return false;
+   }
+-  if (! APRSSettingsElement(data(Offset::aprsSettings())).encode(ctx, err)) {
++  if (! encodeKeepingUnchanged(
++          Offset::aprsSettings(), APRSSettingsElement::size(),
++          [](uint8_t *p, Context &c, const ErrorStack &e) { return APRSSettingsElement(p).encode(c, e); },
++          ctx, err)) {
+     errMsg(err) << "Cannot encode APRS settings.";
+     return false;
+   }
+@@ -4419,6 +4713,33 @@ DM32UVCodeplug::encodeChannels(Context &ctx, const ErrorStack &err) {
+   // Encode channels
+   ChannelBankElement bank(data(Offset::channelBanks()));
+   bank.setChannelCount(std::min(ctx.count<Channel>(), ChannelBankElement::Limit::channels()));
++
++  // Find the channel of the radio's current codeplug that a channel of the new configuration is
++  // based on: the same name and receive frequency, or the same slot with the same name or frequency.
++  std::vector<int> priorOf(ctx.count<Channel>(), -1);
++  auto findPrevious = [this](const Channel *ch, unsigned int slot) -> int {
++    if (nullptr == _previous)
++      return -1;
++    auto *list = _previous->config.channelList();
++    int n = list->count();
++    for (int j=0; j<n; j++) {
++      if (_previous->used[j])
++        continue;
++      auto *old = list->channel(j);
++      if ((old->name() == ch->name()) && (old->rxFrequency() == ch->rxFrequency())) {
++        _previous->used[j] = true;
++        return j;
++      }
++    }
++    if (((int)slot < n) && (! _previous->used[slot])) {
++      auto *old = list->channel(slot);
++      if ((old->name() == ch->name()) || (old->rxFrequency() == ch->rxFrequency())) {
++        _previous->used[slot] = true;
++        return (int)slot;
++      }
++    }
++    return -1;
++  };
+   for (unsigned int i=0; i<bank.channelCount(); i++) {
+     unsigned int blockNumber  = ChannelBankElement::channelBank(i);
+     unsigned int indexInBlock = ChannelBankElement::indexInBank(i);
+@@ -4426,8 +4747,26 @@ DM32UVCodeplug::encodeChannels(Context &ctx, const ErrorStack &err) {
+                     + (0 == blockNumber ? ChannelBankElement::Offset::channelBlock0()
+                                         : blockNumber * ChannelBankElement::Offset::betweenChannelBlocks())
+                     + indexInBlock * ChannelElement::size();
+-    // Create channel
+-    if (! ChannelElement(data(addr)).encode(ctx.get<Channel>(i), ctx, err)) {
++    // Update the channel in place if it is already in the radio, keeping everything the user did
++    // not change. Otherwise create it.
++    const Channel *channel = ctx.get<Channel>(i);
++    int prior = findPrevious(channel, i);
++    if (prior >= 0) {
++      std::vector<uint8_t> fresh(ChannelElement::size(), 0x00), before(ChannelElement::size(), 0x00);
++      ErrorStack e;
++      if (ChannelElement(fresh.data()).encode(channel, ctx, err)
++          && ChannelElement(before.data()).encode(_previous->config.channelList()->channel(prior), *_previous->ctx, e)) {
++        uint8_t *real = data(addr);
++        const std::vector<uint8_t> &old = _previous->channels[prior];
++        for (unsigned int b=0; b<ChannelElement::size(); b++) {
++          uint8_t changed = fresh[b] ^ before[b];
++          real[b] = (old[b] & ~changed) | (fresh[b] & changed);
++        }
++        priorOf[i] = prior;
++        continue;
++      }
++    }
++    if (! ChannelElement(data(addr)).encode(channel, ctx, err)) {
+       errMsg(err) << "Cannot encode channel at index " << i << ".";
+       return false;
+     }
+@@ -4448,6 +4787,20 @@ DM32UVCodeplug::encodeChannels(Context &ctx, const ErrorStack &err) {
+     uint32_t addr = Offset::channelExtensionBanks()
+         + blockNumber * ChannelExtensionBankElement::Offset::betweenBanks()
+         + indexInBlock * ChannelExtensionElement::size();
++    if ((priorOf[i] >= 0) && (nullptr != _previous)) {
++      std::vector<uint8_t> fresh(ChannelExtensionElement::size(), 0x00), before(ChannelExtensionElement::size(), 0x00);
++      ErrorStack e;
++      if (ChannelExtensionElement(fresh.data()).encode(ctx.get<Channel>(i), ctx, err)
++          && ChannelExtensionElement(before.data()).encode(_previous->config.channelList()->channel(priorOf[i]), *_previous->ctx, e)) {
++        uint8_t *real = data(addr);
++        const std::vector<uint8_t> &old = _previous->extensions[priorOf[i]];
++        for (unsigned int b=0; b<ChannelExtensionElement::size(); b++) {
++          uint8_t changed = fresh[b] ^ before[b];
++          real[b] = (old[b] & ~changed) | (fresh[b] & changed);
++        }
++        continue;
++      }
++    }
+     if (! ChannelExtensionElement(data(addr)).encode(ctx.get<Channel>(i), ctx, err)) {
+       errMsg(err) << "Cannot encode channel extension at index " << i << ".";
+       return false;
+diff --git a/lib/dm32uv_codeplug.hh b/lib/dm32uv_codeplug.hh
+index edcba57..8da64d7 100644
+--- a/lib/dm32uv_codeplug.hh
++++ b/lib/dm32uv_codeplug.hh
+@@ -3,6 +3,7 @@
+ 
+ #include <QObject>
+ #include <QString>
++#include <functional>
+ 
+ #include "channel.hh"
+ #include "codeplug.hh"
+@@ -17,6 +18,7 @@
+ 
+ // forward declaration
+ class Zone;
++class DM32UVSettingsExtension;
+ class SMSTemplate;
+ 
+ 
+@@ -1930,6 +1932,15 @@ public:
+     virtual void setDMRMicLevel(Level level);
+ 
+     /** Decodes the general settings. */
++    /** Reads the settings that are not part of the common radio settings into a new extension
++     * object. Values outside the known ranges are replaced by defaults. The caller takes the
++     * ownership of the returned object. */
++    virtual DM32UVSettingsExtension *extension() const;
++    /** Writes those settings of the extension that differ from what the radio currently has.
++     * Fields whose extension value equals the value read back from the radio are not touched, so
++     * a codeplug that was decoded and encoded again keeps every byte of the radio as it was. */
++    virtual void applyExtension(const DM32UVSettingsExtension *ext);
++
+     virtual bool decode(Context &ctx, const ErrorStack &err=ErrorStack());
+     /** Encode general settings. */
+     virtual bool encode(Context &ctx, const ErrorStack &err=ErrorStack());
+@@ -1994,7 +2005,9 @@ public:
+       static constexpr unsigned int zoneNameAColor()     { return 0x003a; }
+       static constexpr unsigned int zoneNameBColor()     { return 0x003b; }
+       static constexpr Bit positionFormat()              { return {0x0040, 6}; }
+-      static constexpr Bit gnssMode()                    { return {0x0040, 3}; }
++      /* NeonPlug and the manufacturer's CPS agree: the GPS mode is in bits 2-3 of 0x40 (earlier
++       * versions of QDMR used bits 3-4, which read 'GPS+BDS' as 'Beidou'). */
++      static constexpr Bit gnssMode()                    { return {0x0040, 2}; }
+       static constexpr Bit enableGNSS()                  { return {0x0040, 0}; }
+       static constexpr unsigned int timeZone()           { return 0x0041; }
+       static constexpr unsigned int posUpdatePeriod()    { return 0x0042; }
+@@ -2412,6 +2425,22 @@ protected:
+   /** Encodes all channels. */
+   virtual bool encodeChannels(Context &ctx, const ErrorStack &err=ErrorStack());
+ 
++  /** What the radio holds right now, decoded and indexed like a configuration that is about to be
++   * written. Used so that an update only changes what the user changed: the radio keeps every
++   * setting that QDMR does not model (PTT ID, APRS report mode, ...) and every value that QDMR
++   * would only re-encode in a different way (squelch). Defined in the .cc file. */
++  struct Previous;
++  /** Decodes the current content of the image. Returns @c nullptr if that is not possible; the
++   * codeplug is then written as before. The caller takes the ownership. */
++  virtual Previous *capturePrevious(const ErrorStack &err=ErrorStack());
++  /** Encodes an element at a fixed address twice, once for the new and once for the previous
++   * configuration, and changes only the bits of the element that differ between the two. */
++  bool encodeKeepingUnchanged(uint32_t offset, size_t size,
++                              const std::function<bool(uint8_t *, Context &, const ErrorStack &)> &fn,
++                              Context &ctx, const ErrorStack &err);
++  /** Previous codeplug content while an update is encoded, otherwise @c nullptr. */
++  Previous *_previous;
++
+   /** Decode contacts. */
+   virtual bool decodeContacts(Context &ctx, const ErrorStack &err=ErrorStack());
+   /** Allocate and encode contacts. */
+diff --git a/lib/dm32uv_extension.cc b/lib/dm32uv_extension.cc
+new file mode 100644
+index 0000000..7ddbdfb
+--- /dev/null
++++ b/lib/dm32uv_extension.cc
+@@ -0,0 +1,573 @@
++#include "dm32uv_extension.hh"
++#include "logger.hh"
++
++
++/* ********************************************************************************************* *
++ * Implementation of DM32UVSettingsExtension
++ * ********************************************************************************************* */
++DM32UVSettingsExtension::DM32UVSettingsExtension(QObject *parent)
++  : ConfigExtension(parent),
++    _autoPowerOff(AutoPowerOff::Off),
++    _fmRogerTone(FMRogerTone::Off),
++    _groupCallTone(false),
++    _lowBatteryTone(false),
++    _showVolumeChange(false),
++    _showClock(false),
++    _dateFormat(DateFormat::DayMonthYear),
++    _backlightDuration(BacklightDuration::Sec5),
++    _callColor(Color::Cyan),
++    _standbyColor(Color::Green),
++    _channelNameAColor(Color::Orange),
++    _channelNameBColor(Color::Yellow),
++    _zoneNameAColor(Color::Blue),
++    _zoneNameBColor(Color::Red),
++    _positionFormat(PositionFormat::DecimalDegrees),
++    _recordingEnabled(false),
++    _recordMode(RecordMode::Receive),
++    _activeRetries(3),
++    _radioDisableDecode(false),
++    _remoteMonitorDecode(false),
++    _callAlertDecode(false),
++    _radioEnableDecode(false),
++    _radioCheckDecode(false),
++    _missedCallAlert(false),
++    _onlyChannelMode(false),
++    _displayModeA(DisplayMode::ChannelName),
++    _displayModeB(DisplayMode::ChannelName),
++    _dualWatchMode(DualWatchMode::DoubleStandby),
++    _utcOffset(0),
++    _gpsIntervalSeconds(5),
++    _backlightBrightness(3),
++    _activeWaitTimeMs(300),
++    _allLEDsDisabled(false),
++    _weatherAlarm(false),
++    _powerSave(PowerSave::Off),
++    _tailNoiseReduction(TailNoiseReduction::Off),
++    _tbst(TBST::Hz1750)
++{
++  // pass...
++}
++
++bool
++DM32UVSettingsExtension::parse(const YAML::Node &node, ConfigItem::Context &ctx, const ErrorStack &err) {
++  if (! ConfigItem::parse(node, ctx, err))
++    return false;
++
++  QStringList missing;
++  const QMetaObject *meta = metaObject();
++  for (int p=QObject::staticMetaObject.propertyCount(); p<meta->propertyCount(); p++) {
++    const char *name = meta->property(p).name();
++    if (! node[name].IsDefined())
++      missing.append(name);
++  }
++  // Values outside what the radio can store are refused here, before anything can be written.
++  QStringList bad;
++  if (utcOffset() < -12 || utcOffset() > 13)
++    bad.append("utcOffset (-12 to 13)");
++  if (gpsIntervalSeconds() < 5 || gpsIntervalSeconds() > 255)
++    bad.append("gpsIntervalSeconds (5 to 255)");
++  if (backlightBrightness() < 1 || backlightBrightness() > 6)
++    bad.append("backlightBrightness (1 to 6)");
++  if (activeWaitTimeMs() < 300 || activeWaitTimeMs() > 4800 || 0 != (activeWaitTimeMs()-300) % 30)
++    bad.append("activeWaitTimeMs (300 to 4800 in steps of 30)");
++  if (missing.isEmpty() && ! bad.isEmpty()) {
++    errMsg(err) << node.Mark().line << ":" << node.Mark().column
++                << ": Invalid value in the 'dm32uv' settings section: " << bad.join(", ") << ".";
++    return false;
++  }
++  if (! missing.isEmpty()) {
++    errMsg(err) << node.Mark().line << ":" << node.Mark().column
++                << ": The 'dm32uv' settings section is incomplete. Missing keys: "
++                << missing.join(", ") << ". Provide all keys as written by 'decode', or remove "
++                << "the whole section to leave these radio settings unchanged.";
++    return false;
++  }
++  return true;
++}
++
++ConfigItem *
++DM32UVSettingsExtension::clone() const {
++  ConfigItem *clone = new DM32UVSettingsExtension();
++  if (! clone->copy(*this)) {
++    delete clone;
++    return nullptr;
++  }
++  return clone;
++}
++
++DM32UVSettingsExtension::AutoPowerOff
++DM32UVSettingsExtension::autoPowerOff() const {
++  return _autoPowerOff;
++}
++
++void
++DM32UVSettingsExtension::setAutoPowerOff(AutoPowerOff value) {
++  if (value == _autoPowerOff)
++    return;
++  _autoPowerOff = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::FMRogerTone
++DM32UVSettingsExtension::fmRogerTone() const {
++  return _fmRogerTone;
++}
++
++void
++DM32UVSettingsExtension::setFMRogerTone(FMRogerTone value) {
++  if (value == _fmRogerTone)
++    return;
++  _fmRogerTone = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::groupCallTone() const {
++  return _groupCallTone;
++}
++
++void
++DM32UVSettingsExtension::enableGroupCallTone(bool value) {
++  if (value == _groupCallTone)
++    return;
++  _groupCallTone = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::lowBatteryTone() const {
++  return _lowBatteryTone;
++}
++
++void
++DM32UVSettingsExtension::enableLowBatteryTone(bool value) {
++  if (value == _lowBatteryTone)
++    return;
++  _lowBatteryTone = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::showVolumeChange() const {
++  return _showVolumeChange;
++}
++
++void
++DM32UVSettingsExtension::enableShowVolumeChange(bool value) {
++  if (value == _showVolumeChange)
++    return;
++  _showVolumeChange = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::showClock() const {
++  return _showClock;
++}
++
++void
++DM32UVSettingsExtension::enableShowClock(bool value) {
++  if (value == _showClock)
++    return;
++  _showClock = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::DateFormat
++DM32UVSettingsExtension::dateFormat() const {
++  return _dateFormat;
++}
++
++void
++DM32UVSettingsExtension::setDateFormat(DateFormat value) {
++  if (value == _dateFormat)
++    return;
++  _dateFormat = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::BacklightDuration
++DM32UVSettingsExtension::backlightDuration() const {
++  return _backlightDuration;
++}
++
++void
++DM32UVSettingsExtension::setBacklightDuration(BacklightDuration value) {
++  if (value == _backlightDuration)
++    return;
++  _backlightDuration = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::callColor() const {
++  return _callColor;
++}
++
++void
++DM32UVSettingsExtension::setCallColor(Color value) {
++  if (value == _callColor)
++    return;
++  _callColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::standbyColor() const {
++  return _standbyColor;
++}
++
++void
++DM32UVSettingsExtension::setStandbyColor(Color value) {
++  if (value == _standbyColor)
++    return;
++  _standbyColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::channelNameAColor() const {
++  return _channelNameAColor;
++}
++
++void
++DM32UVSettingsExtension::setChannelNameAColor(Color value) {
++  if (value == _channelNameAColor)
++    return;
++  _channelNameAColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::channelNameBColor() const {
++  return _channelNameBColor;
++}
++
++void
++DM32UVSettingsExtension::setChannelNameBColor(Color value) {
++  if (value == _channelNameBColor)
++    return;
++  _channelNameBColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::zoneNameAColor() const {
++  return _zoneNameAColor;
++}
++
++void
++DM32UVSettingsExtension::setZoneNameAColor(Color value) {
++  if (value == _zoneNameAColor)
++    return;
++  _zoneNameAColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::Color
++DM32UVSettingsExtension::zoneNameBColor() const {
++  return _zoneNameBColor;
++}
++
++void
++DM32UVSettingsExtension::setZoneNameBColor(Color value) {
++  if (value == _zoneNameBColor)
++    return;
++  _zoneNameBColor = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::PositionFormat
++DM32UVSettingsExtension::positionFormat() const {
++  return _positionFormat;
++}
++
++void
++DM32UVSettingsExtension::setPositionFormat(PositionFormat value) {
++  if (value == _positionFormat)
++    return;
++  _positionFormat = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::recordingEnabled() const {
++  return _recordingEnabled;
++}
++
++void
++DM32UVSettingsExtension::enableRecording(bool value) {
++  if (value == _recordingEnabled)
++    return;
++  _recordingEnabled = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::RecordMode
++DM32UVSettingsExtension::recordMode() const {
++  return _recordMode;
++}
++
++void
++DM32UVSettingsExtension::setRecordMode(RecordMode value) {
++  if (value == _recordMode)
++    return;
++  _recordMode = value;
++  emit modified(this);
++}
++
++unsigned int
++DM32UVSettingsExtension::activeRetries() const {
++  return _activeRetries;
++}
++
++void
++DM32UVSettingsExtension::setActiveRetries(unsigned int value) {
++  if (value == _activeRetries)
++    return;
++  _activeRetries = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::radioDisableDecode() const {
++  return _radioDisableDecode;
++}
++
++void
++DM32UVSettingsExtension::enableRadioDisableDecode(bool value) {
++  if (value == _radioDisableDecode)
++    return;
++  _radioDisableDecode = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::remoteMonitorDecode() const {
++  return _remoteMonitorDecode;
++}
++
++void
++DM32UVSettingsExtension::enableRemoteMonitorDecode(bool value) {
++  if (value == _remoteMonitorDecode)
++    return;
++  _remoteMonitorDecode = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::callAlertDecode() const {
++  return _callAlertDecode;
++}
++
++void
++DM32UVSettingsExtension::enableCallAlertDecode(bool value) {
++  if (value == _callAlertDecode)
++    return;
++  _callAlertDecode = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::radioEnableDecode() const {
++  return _radioEnableDecode;
++}
++
++void
++DM32UVSettingsExtension::enableRadioEnableDecode(bool value) {
++  if (value == _radioEnableDecode)
++    return;
++  _radioEnableDecode = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::radioCheckDecode() const {
++  return _radioCheckDecode;
++}
++
++void
++DM32UVSettingsExtension::enableRadioCheckDecode(bool value) {
++  if (value == _radioCheckDecode)
++    return;
++  _radioCheckDecode = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::missedCallAlert() const {
++  return _missedCallAlert;
++}
++
++void
++DM32UVSettingsExtension::enableMissedCallAlert(bool value) {
++  if (value == _missedCallAlert)
++    return;
++  _missedCallAlert = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::onlyChannelMode() const {
++  return _onlyChannelMode;
++}
++
++void
++DM32UVSettingsExtension::enableOnlyChannelMode(bool value) {
++  if (value == _onlyChannelMode)
++    return;
++  _onlyChannelMode = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::DisplayMode
++DM32UVSettingsExtension::displayModeA() const {
++  return _displayModeA;
++}
++
++void
++DM32UVSettingsExtension::setDisplayModeA(DisplayMode value) {
++  if (value == _displayModeA)
++    return;
++  _displayModeA = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::DisplayMode
++DM32UVSettingsExtension::displayModeB() const {
++  return _displayModeB;
++}
++
++void
++DM32UVSettingsExtension::setDisplayModeB(DisplayMode value) {
++  if (value == _displayModeB)
++    return;
++  _displayModeB = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::DualWatchMode
++DM32UVSettingsExtension::dualWatchMode() const {
++  return _dualWatchMode;
++}
++
++void
++DM32UVSettingsExtension::setDualWatchMode(DualWatchMode value) {
++  if (value == _dualWatchMode)
++    return;
++  _dualWatchMode = value;
++  emit modified(this);
++}
++
++int
++DM32UVSettingsExtension::utcOffset() const {
++  return _utcOffset;
++}
++void
++DM32UVSettingsExtension::setUTCOffset(int value) {
++  if (value == _utcOffset)
++    return;
++  _utcOffset = value;
++  emit modified(this);
++}
++
++unsigned int
++DM32UVSettingsExtension::gpsIntervalSeconds() const {
++  return _gpsIntervalSeconds;
++}
++void
++DM32UVSettingsExtension::setGPSIntervalSeconds(unsigned int value) {
++  if (value == _gpsIntervalSeconds)
++    return;
++  _gpsIntervalSeconds = value;
++  emit modified(this);
++}
++
++unsigned int
++DM32UVSettingsExtension::backlightBrightness() const {
++  return _backlightBrightness;
++}
++void
++DM32UVSettingsExtension::setBacklightBrightness(unsigned int value) {
++  if (value == _backlightBrightness)
++    return;
++  _backlightBrightness = value;
++  emit modified(this);
++}
++
++unsigned int
++DM32UVSettingsExtension::activeWaitTimeMs() const {
++  return _activeWaitTimeMs;
++}
++void
++DM32UVSettingsExtension::setActiveWaitTimeMs(unsigned int value) {
++  if (value == _activeWaitTimeMs)
++    return;
++  _activeWaitTimeMs = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::allLEDsDisabled() const {
++  return _allLEDsDisabled;
++}
++
++void
++DM32UVSettingsExtension::disableAllLEDs(bool value) {
++  if (value == _allLEDsDisabled)
++    return;
++  _allLEDsDisabled = value;
++  emit modified(this);
++}
++
++bool
++DM32UVSettingsExtension::weatherAlarm() const {
++  return _weatherAlarm;
++}
++
++void
++DM32UVSettingsExtension::enableWeatherAlarm(bool value) {
++  if (value == _weatherAlarm)
++    return;
++  _weatherAlarm = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::PowerSave
++DM32UVSettingsExtension::powerSave() const {
++  return _powerSave;
++}
++
++void
++DM32UVSettingsExtension::setPowerSave(PowerSave value) {
++  if (value == _powerSave)
++    return;
++  _powerSave = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::TailNoiseReduction
++DM32UVSettingsExtension::tailNoiseReduction() const {
++  return _tailNoiseReduction;
++}
++
++void
++DM32UVSettingsExtension::setTailNoiseReduction(TailNoiseReduction value) {
++  if (value == _tailNoiseReduction)
++    return;
++  _tailNoiseReduction = value;
++  emit modified(this);
++}
++
++DM32UVSettingsExtension::TBST
++DM32UVSettingsExtension::tbst() const {
++  return _tbst;
++}
++
++void
++DM32UVSettingsExtension::setTBST(TBST value) {
++  if (value == _tbst)
++    return;
++  _tbst = value;
++  emit modified(this);
++}
+diff --git a/lib/dm32uv_extension.hh b/lib/dm32uv_extension.hh
+new file mode 100644
+index 0000000..602fa1a
+--- /dev/null
++++ b/lib/dm32uv_extension.hh
+@@ -0,0 +1,320 @@
++#ifndef DM32UVEXTENSION_HH
++#define DM32UVEXTENSION_HH
++
++#include "configobject.hh"
++#include "interval.hh"
++
++
++/** Additional general settings of the Baofeng DM-32UV that are stored in the radio but are not
++ * part of the common radio settings.
++ *
++ * The properties are grouped like the tabs of the manufacturer's CPS ("Optional Features"). Each
++ * property maps to exactly one field of the radio's general settings block. If the extension is
++ * absent from a codeplug, the corresponding fields in the radio are left untouched when writing.
++ *
++ * @ingroup dm32uv */
++class DM32UVSettingsExtension: public ConfigExtension
++{
++  Q_OBJECT
++
++  /* Power on/off */
++  /** Automatic power-off delay. */
++  Q_PROPERTY(AutoPowerOff autoPowerOff READ autoPowerOff WRITE setAutoPowerOff)
++
++  /* Alert tones */
++  /** Roger tone on analog channels. */
++  Q_PROPERTY(FMRogerTone fmRogerTone READ fmRogerTone WRITE setFMRogerTone)
++  /** If @c true, a tone is played on incoming group calls. */
++  Q_PROPERTY(bool groupCallTone READ groupCallTone WRITE enableGroupCallTone)
++  /** If @c true, a tone warns of a low battery. */
++  Q_PROPERTY(bool lowBatteryTone READ lowBatteryTone WRITE enableLowBatteryTone)
++
++  /* Display */
++  /** If @c true, a volume change is shown on the display. */
++  Q_PROPERTY(bool showVolumeChange READ showVolumeChange WRITE enableShowVolumeChange)
++  /** If @c true, the time is shown on the display. */
++  Q_PROPERTY(bool showClock READ showClock WRITE enableShowClock)
++  /** The date display format. */
++  Q_PROPERTY(DateFormat dateFormat READ dateFormat WRITE setDateFormat)
++  /** The time the backlight stays on. */
++  Q_PROPERTY(BacklightDuration backlightDuration READ backlightDuration WRITE setBacklightDuration)
++  /** Display color of calls. */
++  Q_PROPERTY(Color callColor READ callColor WRITE setCallColor)
++  /** Color of the characters on the standby screen. */
++  Q_PROPERTY(Color standbyColor READ standbyColor WRITE setStandbyColor)
++  /** Color of the channel name of VFO A. */
++  Q_PROPERTY(Color channelNameAColor READ channelNameAColor WRITE setChannelNameAColor)
++  /** Color of the channel name of VFO B. */
++  Q_PROPERTY(Color channelNameBColor READ channelNameBColor WRITE setChannelNameBColor)
++  /** Color of the zone name of VFO A. */
++  Q_PROPERTY(Color zoneNameAColor READ zoneNameAColor WRITE setZoneNameAColor)
++  /** Color of the zone name of VFO B. */
++  Q_PROPERTY(Color zoneNameBColor READ zoneNameBColor WRITE setZoneNameBColor)
++
++  /* GPS */
++  /** The format of positions on the display. */
++  Q_PROPERTY(PositionFormat positionFormat READ positionFormat WRITE setPositionFormat)
++
++  /* Record */
++  /** If @c true, recording is enabled. */
++  Q_PROPERTY(bool recordingEnabled READ recordingEnabled WRITE enableRecording)
++  /** What is recorded. */
++  Q_PROPERTY(RecordMode recordMode READ recordMode WRITE setRecordMode)
++
++  /* Digital */
++  /** Number of retries when waiting for an answer to an active call [1,8]. */
++  Q_PROPERTY(unsigned int activeRetries READ activeRetries WRITE setActiveRetries)
++  /** If @c true, the radio reacts to a "radio disable" command. */
++  Q_PROPERTY(bool radioDisableDecode READ radioDisableDecode WRITE enableRadioDisableDecode)
++  /** If @c true, the radio reacts to a "remote monitor" command. */
++  Q_PROPERTY(bool remoteMonitorDecode READ remoteMonitorDecode WRITE enableRemoteMonitorDecode)
++  /** If @c true, the radio reacts to a "call alert" command. */
++  Q_PROPERTY(bool callAlertDecode READ callAlertDecode WRITE enableCallAlertDecode)
++  /** If @c true, the radio reacts to a "radio enable" command. */
++  Q_PROPERTY(bool radioEnableDecode READ radioEnableDecode WRITE enableRadioEnableDecode)
++  /** If @c true, the radio reacts to a "radio check" command. */
++  Q_PROPERTY(bool radioCheckDecode READ radioCheckDecode WRITE enableRadioCheckDecode)
++  /** If @c true, missed calls are indicated. */
++  Q_PROPERTY(bool missedCallAlert READ missedCallAlert WRITE enableMissedCallAlert)
++
++  /* Work mode */
++  /** If @c true, only the channel mode can be used (no VFO mode). */
++  Q_PROPERTY(bool onlyChannelMode READ onlyChannelMode WRITE enableOnlyChannelMode)
++  /** What is shown for VFO A. */
++  Q_PROPERTY(DisplayMode displayModeA READ displayModeA WRITE setDisplayModeA)
++  /** What is shown for VFO B. */
++  Q_PROPERTY(DisplayMode displayModeB READ displayModeB WRITE setDisplayModeB)
++  /** Dual-watch (dual-standby) mode. */
++  Q_PROPERTY(DualWatchMode dualWatchMode READ dualWatchMode WRITE setDualWatchMode)
++
++  /* Step 2: settings where QDMR's earlier reading disagreed with the factory CPS */
++  /** Time zone as hours from UTC [-12, 13]. */
++  Q_PROPERTY(int utcOffset READ utcOffset WRITE setUTCOffset)
++  /** Interval of position measurements in seconds [5, 255]. */
++  Q_PROPERTY(unsigned int gpsIntervalSeconds READ gpsIntervalSeconds WRITE setGPSIntervalSeconds)
++  /** Backlight brightness [1, 6]. */
++  Q_PROPERTY(unsigned int backlightBrightness READ backlightBrightness WRITE setBacklightBrightness)
++  /** Time to wait for an answer of an active call in milliseconds [300, 4800] in steps of 30. */
++  Q_PROPERTY(unsigned int activeWaitTimeMs READ activeWaitTimeMs WRITE setActiveWaitTimeMs)
++
++  /* Other */
++  /** If @c true, all LEDs are disabled. */
++  Q_PROPERTY(bool allLEDsDisabled READ allLEDsDisabled WRITE disableAllLEDs)
++  /** If @c true, the weather alarm is enabled. */
++  Q_PROPERTY(bool weatherAlarm READ weatherAlarm WRITE enableWeatherAlarm)
++  /** Power-save mode. */
++  Q_PROPERTY(PowerSave powerSave READ powerSave WRITE setPowerSave)
++  /** Tail-noise reduction. */
++  Q_PROPERTY(TailNoiseReduction tailNoiseReduction READ tailNoiseReduction WRITE setTailNoiseReduction)
++  /** Frequency of the TBST tone. */
++  Q_PROPERTY(TBST tbst READ tbst WRITE setTBST)
++
++public:
++  /** Automatic power-off delays. */
++  enum class AutoPowerOff {
++    Off = 0, Min30 = 1, Min60 = 2, Hours2 = 3, Hours4 = 4, Hours8 = 5
++  };
++  Q_ENUM(AutoPowerOff)
++
++  /** Roger tones on analog channels. */
++  enum class FMRogerTone {
++    Off = 0, Beep = 1, BDC = 2
++  };
++  Q_ENUM(FMRogerTone)
++
++  /** Date formats. */
++  enum class DateFormat {
++    YearMonthDay = 0, DayMonthYear = 1
++  };
++  Q_ENUM(DateFormat)
++
++  /** Backlight durations. */
++  enum class BacklightDuration {
++    Always = 0, Sec5 = 1, Sec10 = 2, Sec15 = 3, Sec20 = 4, Sec25 = 5, Sec30 = 6,
++    Min1 = 7, Min2 = 8, Min3 = 9, Min4 = 10, Min5 = 11
++  };
++  Q_ENUM(BacklightDuration)
++
++  /** Display colors. */
++  enum class Color {
++    White = 0, Black = 1, Orange = 2, Red = 3, Yellow = 4, Green = 5, Cyan = 6, Blue = 7
++  };
++  Q_ENUM(Color)
++
++  /** Position formats. */
++  enum class PositionFormat {
++    DecimalDegrees = 0, DegreesMinutesSeconds = 1
++  };
++  Q_ENUM(PositionFormat)
++
++  /** Recording modes. */
++  enum class RecordMode {
++    Receive = 0, Transmit = 1, Both = 2
++  };
++  Q_ENUM(RecordMode)
++
++  /** What is displayed for a VFO. */
++  enum class DisplayMode {
++    Frequency = 0, ChannelName = 1
++  };
++  Q_ENUM(DisplayMode)
++
++  /** Dual-watch modes. */
++  enum class DualWatchMode {
++    SingleVFO = 0, DoubleStandby = 1, SingleStandby = 2
++  };
++  Q_ENUM(DualWatchMode)
++
++  /** Power-save modes. The value is the share of time the radio sleeps. */
++  enum class PowerSave {
++    Off = 0, Percent50 = 1, Percent66 = 2, Percent75 = 3
++  };
++  Q_ENUM(PowerSave)
++
++  /** Tail-noise reduction modes. */
++  enum class TailNoiseReduction {
++    Off = 0, Deg120 = 1, Deg180 = 2, Hz55 = 3
++  };
++  Q_ENUM(TailNoiseReduction)
++
++  /** TBST tone frequencies. */
++  enum class TBST {
++    Hz1000 = 0, Hz1450 = 1, Hz1750 = 2, Hz2100 = 3
++  };
++  Q_ENUM(TBST)
++
++public:
++  /** Default constructor. */
++  Q_INVOKABLE explicit DM32UVSettingsExtension(QObject *parent=nullptr);
++
++  ConfigItem *clone() const;
++
++  /** Parses the extension from YAML. All keys must be present: a key that is missing would be
++   * set to its default and then written to the radio on top of the value stored there. A section
++   * as written by "decode" is always complete. Refusing an incomplete section is the safe choice. */
++  bool parse(const YAML::Node &node, Context &ctx, const ErrorStack &err=ErrorStack());
++
++  AutoPowerOff autoPowerOff() const;
++  void setAutoPowerOff(AutoPowerOff delay);
++
++  FMRogerTone fmRogerTone() const;
++  void setFMRogerTone(FMRogerTone tone);
++  bool groupCallTone() const;
++  void enableGroupCallTone(bool enable);
++  bool lowBatteryTone() const;
++  void enableLowBatteryTone(bool enable);
++
++  bool showVolumeChange() const;
++  void enableShowVolumeChange(bool enable);
++  bool showClock() const;
++  void enableShowClock(bool enable);
++  DateFormat dateFormat() const;
++  void setDateFormat(DateFormat format);
++  BacklightDuration backlightDuration() const;
++  void setBacklightDuration(BacklightDuration duration);
++  Color callColor() const;
++  void setCallColor(Color color);
++  Color standbyColor() const;
++  void setStandbyColor(Color color);
++  Color channelNameAColor() const;
++  void setChannelNameAColor(Color color);
++  Color channelNameBColor() const;
++  void setChannelNameBColor(Color color);
++  Color zoneNameAColor() const;
++  void setZoneNameAColor(Color color);
++  Color zoneNameBColor() const;
++  void setZoneNameBColor(Color color);
++
++  PositionFormat positionFormat() const;
++  void setPositionFormat(PositionFormat format);
++
++  bool recordingEnabled() const;
++  void enableRecording(bool enable);
++  RecordMode recordMode() const;
++  void setRecordMode(RecordMode mode);
++
++  unsigned int activeRetries() const;
++  void setActiveRetries(unsigned int retries);
++  bool radioDisableDecode() const;
++  void enableRadioDisableDecode(bool enable);
++  bool remoteMonitorDecode() const;
++  void enableRemoteMonitorDecode(bool enable);
++  bool callAlertDecode() const;
++  void enableCallAlertDecode(bool enable);
++  bool radioEnableDecode() const;
++  void enableRadioEnableDecode(bool enable);
++  bool radioCheckDecode() const;
++  void enableRadioCheckDecode(bool enable);
++  bool missedCallAlert() const;
++  void enableMissedCallAlert(bool enable);
++
++  bool onlyChannelMode() const;
++  void enableOnlyChannelMode(bool enable);
++  DisplayMode displayModeA() const;
++  void setDisplayModeA(DisplayMode mode);
++  DisplayMode displayModeB() const;
++  void setDisplayModeB(DisplayMode mode);
++  DualWatchMode dualWatchMode() const;
++  void setDualWatchMode(DualWatchMode mode);
++
++  int utcOffset() const;
++  void setUTCOffset(int hours);
++  unsigned int gpsIntervalSeconds() const;
++  void setGPSIntervalSeconds(unsigned int seconds);
++  unsigned int backlightBrightness() const;
++  void setBacklightBrightness(unsigned int level);
++  unsigned int activeWaitTimeMs() const;
++  void setActiveWaitTimeMs(unsigned int ms);
++
++  bool allLEDsDisabled() const;
++  void disableAllLEDs(bool disable);
++  bool weatherAlarm() const;
++  void enableWeatherAlarm(bool enable);
++  PowerSave powerSave() const;
++  void setPowerSave(PowerSave mode);
++  TailNoiseReduction tailNoiseReduction() const;
++  void setTailNoiseReduction(TailNoiseReduction mode);
++  TBST tbst() const;
++  void setTBST(TBST frequency);
++
++protected:
++  AutoPowerOff _autoPowerOff;
++  FMRogerTone _fmRogerTone;
++  bool _groupCallTone;
++  bool _lowBatteryTone;
++  bool _showVolumeChange;
++  bool _showClock;
++  DateFormat _dateFormat;
++  BacklightDuration _backlightDuration;
++  Color _callColor;
++  Color _standbyColor;
++  Color _channelNameAColor;
++  Color _channelNameBColor;
++  Color _zoneNameAColor;
++  Color _zoneNameBColor;
++  PositionFormat _positionFormat;
++  bool _recordingEnabled;
++  RecordMode _recordMode;
++  unsigned int _activeRetries;
++  bool _radioDisableDecode;
++  bool _remoteMonitorDecode;
++  bool _callAlertDecode;
++  bool _radioEnableDecode;
++  bool _radioCheckDecode;
++  bool _missedCallAlert;
++  bool _onlyChannelMode;
++  DisplayMode _displayModeA;
++  DisplayMode _displayModeB;
++  DualWatchMode _dualWatchMode;
++  int _utcOffset;
++  unsigned int _gpsIntervalSeconds;
++  unsigned int _backlightBrightness;
++  unsigned int _activeWaitTimeMs;
++  bool _allLEDsDisabled;
++  bool _weatherAlarm;
++  PowerSave _powerSave;
++  TailNoiseReduction _tailNoiseReduction;
++  TBST _tbst;
++};
++
++#endif // DM32UVEXTENSION_HH
+diff --git a/lib/dm32uv_limits.cc b/lib/dm32uv_limits.cc
+index 7376703..2a3f06c 100644
+--- a/lib/dm32uv_limits.cc
++++ b/lib/dm32uv_limits.cc
+@@ -35,6 +35,11 @@ DM32UVLimits::DM32UVLimits(QObject *parent)
+         { "squelch", new RadioLimitIgnored(RadioLimitIssue::Silent) },
+         { "vox", new RadioLimitIgnored(RadioLimitIssue::Silent) },
+         { "tot", new RadioLimitInterval() },
++        { "dm32uv", new RadioLimitItem {
++            {"activeRetries", new RadioLimitUInt(1, 8, -1, RadioLimitIssue::Severity::Critical) },
++            {"gpsIntervalSeconds", new RadioLimitUInt(5, 255, -1, RadioLimitIssue::Severity::Critical) },
++            {"backlightBrightness", new RadioLimitUInt(1, 6, -1, RadioLimitIssue::Severity::Critical) },
++            {"activeWaitTimeMs", new RadioLimitUInt(300, 4800, -1, RadioLimitIssue::Severity::Critical) } } },
+         { "boot", new RadioLimitItem {
+             {"passwordEnabled", new RadioLimitIgnored(RadioLimitIssue::Silent) },
+             {"password", new RadioLimitPin(DM32UVCodeplug::PasswordSettingsElement::Limit::passwordLength(), RadioLimitIssue::Critical) } } }
+diff --git a/lib/radiosettings.cc b/lib/radiosettings.cc
+index 27e0a72..f309a34 100644
+--- a/lib/radiosettings.cc
++++ b/lib/radiosettings.cc
+@@ -11,7 +11,7 @@ RadioSettings::RadioSettings(QObject *parent)
+     _tone(new ToneSettings(this)),
+     _gnss(new GNSSSettings(this)), _dmr(new DMRSettings(this)),
+     _tytExtension(nullptr), _radioddityExtension(nullptr),
+-    _anytoneExtension(nullptr)
++    _anytoneExtension(nullptr), _dm32uvExtension(nullptr)
+ {
+   connect(_boot, &BootSettings::modified, this, &RadioSettings::modified);
+   connect(_audio, &AudioSettings::modified, this, &RadioSettings::modified);
+@@ -52,6 +52,7 @@ RadioSettings::clear() {
+   setTyTExtension(nullptr);
+   setRadioddityExtension(nullptr);
+   setAnytoneExtension(nullptr);
++  setDM32UVExtension(nullptr);
+ }
+ 
+ Channel::Power
+@@ -188,6 +189,24 @@ RadioSettings::setAnytoneExtension(AnytoneSettingsExtension *ext) {
+   emit modified(this);
+ }
+ 
++DM32UVSettingsExtension *
++RadioSettings::dm32uvExtension() const {
++  return _dm32uvExtension;
++}
++void
++RadioSettings::setDM32UVExtension(DM32UVSettingsExtension *ext) {
++  if (_dm32uvExtension) {
++    disconnect(_dm32uvExtension, SIGNAL(modified(ConfigItem*)), this, SLOT(onExtensionModified()));
++    _dm32uvExtension->deleteLater();
++  }
++  _dm32uvExtension = ext;
++  if (_dm32uvExtension) {
++    _dm32uvExtension->setParent(this);
++    connect(_dm32uvExtension, SIGNAL(modified(ConfigItem*)), this, SLOT(onExtensionModified()));
++  }
++  emit modified(this);
++}
++
+ 
+ void
+ RadioSettings::onExtensionModified() {
+diff --git a/lib/radiosettings.hh b/lib/radiosettings.hh
+index 956b135..d761879 100644
+--- a/lib/radiosettings.hh
++++ b/lib/radiosettings.hh
+@@ -12,6 +12,7 @@
+ #include "radioddity_extensions.hh"
+ #include "anytone_settingsextension.hh"
+ #include "tyt_extensions.hh"
++#include "dm32uv_extension.hh"
+ 
+ 
+ /** Represents the common radio-global settings.
+@@ -41,6 +42,8 @@ class RadioSettings : public ConfigItem
+   Q_PROPERTY(RadiodditySettingsExtension * radioddity READ radioddityExtension WRITE setRadioddityExtension)
+   /** Settings for AnyTone devices. */
+   Q_PROPERTY(AnytoneSettingsExtension *anytone READ anytoneExtension WRITE setAnytoneExtension)
++  /** Settings for the Baofeng DM-32UV. */
++  Q_PROPERTY(DM32UVSettingsExtension *dm32uv READ dm32uvExtension WRITE setDM32UVExtension)
+ 
+ public:
+   /** Default constructor. */
+@@ -99,6 +102,11 @@ public:
+   /** Sets the AnyTone device specific radio settings. */
+   void setAnytoneExtension(AnytoneSettingsExtension *ext);
+ 
++  /** Returns the DM-32UV specific radio settings. */
++  DM32UVSettingsExtension *dm32uvExtension() const;
++  /** Sets the DM-32UV specific radio settings. */
++  void setDM32UVExtension(DM32UVSettingsExtension *ext);
++
+   bool parse(const YAML::Node &node, Context &ctx, const ErrorStack &err=ErrorStack());
+ 
+ protected:
+@@ -131,6 +139,8 @@ protected:
+   RadiodditySettingsExtension *_radioddityExtension;
+   /** Device specific settings extension for AnyTone devices. */
+   AnytoneSettingsExtension *_anytoneExtension;
++  /** Device specific settings extension for the DM-32UV. */
++  DM32UVSettingsExtension *_dm32uvExtension;
+ };
+ 
+ #endif // RADIOCONFIG_HH
