@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codeplug Studio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F4F8F8;--panel:#FFFFFF;--line:#D8E3E5;--line2:#E6EEEF;--line3:#C3D2D5;--text:#14282D;--text2:#3D555B;
+  --muted2:#5C7379;--muted:#5F777D;--raised:#EAF1F2;--sunken:#F1F6F7;--onacc:#FFFFFF;--digbg:#E3E8FF;--digfg:#3730A3;
+  --badbg:#FDECEA;--bad:#B42318;--ok:#1A9E6B;--warn:#D97706;--sh1:rgba(16,40,45,0.08);--sh2:rgba(16,40,45,0.16);
+  --acc:#0E7490;--sel:color-mix(in srgb,var(--acc) 14%,var(--panel));color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0E1116;--panel:#151A21;--line:#262E39;--line2:#1F2630;--line3:#2F3946;--text:#E8ECF1;--text2:#B6C0CC;
+  --muted2:#9AA5B4;--muted:#8B96A5;--raised:#1B222B;--sunken:#1A2029;--onacc:#1A1204;--digbg:#1E2A3D;--digfg:#8FB4FF;
+  --badbg:#3A1618;--bad:#FF8A80;--ok:#3DD68C;--sh1:rgba(0,0,0,0.4);--sh2:rgba(0,0,0,0.6);
+  --acc:#F5A524;--sel:color-mix(in srgb,var(--acc) 16%,var(--panel));color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px 'Geist',system-ui,'Segoe UI',sans-serif;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+
+header{height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line);gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:-.2px}
+.badge{width:34px;height:34px;flex:none;color:var(--onacc);clip-path:polygon(50% 2%,92% 26%,92% 74%,50% 98%,8% 74%,8% 26%);
+  background-color:var(--acc);background-image:linear-gradient(135deg,rgba(255,255,255,.32),rgba(0,0,0,.2));display:flex;align-items:center;justify-content:center}
+.group{display:flex;align-items:center;gap:2px;padding:3px;background:var(--bg);border-radius:12px;position:relative}
+.tb{height:32px;padding:0 11px;border:0;border-radius:9px;background:transparent;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500}
+.tb:hover:not(:disabled){background:var(--raised)}
+.fname{display:flex;align-items:center;gap:6px;max-width:200px;padding:0 10px 0 8px;font:11px 'Geist Mono',ui-monospace,monospace;color:var(--muted)}
+.fname span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex:none}
+.right{display:flex;align-items:center;gap:8px}
+.chip{display:flex;align-items:center;gap:7px;color:var(--muted2);font-size:13px;margin:0 6px 0 4px}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.chip i.off{background:var(--bad)}
+.btn{height:38px;padding:0 16px;border-radius:10px;border:1px solid var(--line3);background:var(--panel);display:flex;align-items:center;gap:8px;font-weight:500}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--onacc);font-weight:600}
+.iconbtn{width:36px;height:36px;border:0;border-radius:10px;background:var(--raised);color:var(--text2);display:flex;align-items:center;justify-content:center}
+
+.body{flex:1;min-height:0;display:flex}
+nav{width:250px;flex:none;padding:12px 10px;background:var(--panel);border-right:1px solid var(--line);overflow:auto;display:flex;flex-direction:column;gap:1px}
+.root{display:flex;align-items:center;gap:8px;padding:4px 8px 10px;font-size:13px;font-weight:600}
+.nb{height:28px;display:flex;align-items:center;gap:6px;border:0;border-radius:8px;background:transparent;text-align:left;font-size:13px;font-weight:600;padding:0 8px 0 10px}
+.nb svg{transition:transform .12s}
+.nb.open svg{transform:rotate(90deg)}
+.ni{height:26px;display:flex;align-items:center;border:0;border-radius:8px;background:transparent;text-align:left;font-size:13px;font-weight:500;padding:0 10px 0 32px;color:var(--text2)}
+.nb:hover,.ni:hover{background:var(--raised)}
+.ni.on{background:var(--sel);color:var(--acc)}
+.ni.todo{color:var(--muted)}
+
+main{flex:1;min-width:0;display:flex;flex-direction:column;padding:16px}
+.card{flex:1;min-height:0;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 1px 2px var(--sh1);overflow:auto}
+.grid{display:grid;align-items:stretch}
+.ghead{position:sticky;top:0;z-index:2;background:var(--sunken);border-bottom:1px solid var(--line);height:40px}
+.ghead>div{display:flex;align-items:center;padding:0 8px;color:var(--muted2);font-size:12px;font-weight:500;white-space:nowrap;border-right:1px solid var(--line2)}
+.grow{height:40px;border-bottom:1px solid var(--line2);cursor:default}
+.grow.sel{background:var(--sel)}
+.grow>div{display:flex;align-items:center;min-width:0;border-right:1px solid var(--line2)}
+.grow>div.off{background:var(--sunken);color:var(--muted2);padding:0 8px;opacity:.85}
+.num{padding:0 8px;font:12px 'Geist Mono',ui-monospace,monospace;color:var(--muted)}
+.cellin{width:100%;height:100%;border:0;background:transparent;padding:0 8px;font-size:13px}
+.cellin.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.cellin.bad{background:var(--badbg);color:var(--bad)}
+select.cellin{padding:0 4px;cursor:pointer;appearance:none;-webkit-appearance:none;background:transparent}
+select.cellin option{background:var(--panel);color:var(--text)}
+.tag{margin:0 8px;padding:3px 9px;border-radius:7px;font-size:12px;font-weight:600;white-space:nowrap}
+.tag.fm{background:var(--sel);color:var(--acc)}
+.tag.dmr{background:var(--digbg);color:var(--digfg)}
+.tag.am{background:var(--raised);color:var(--text2)}
+.chk{margin:0 auto;width:18px;height:18px;accent-color:var(--acc)}
+
+.btnrow{display:flex;align-items:center;gap:8px;padding-top:14px;flex-wrap:wrap}
+.sb{min-width:88px;height:36px;border-radius:9px;border:1px solid var(--line3);background:var(--panel);font-size:13px;font-weight:500;padding:0 12px;text-decoration:none;display:flex;align-items:center;justify-content:center;color:var(--text)}
+.sb:hover:not(:disabled){background:var(--raised)}
+.sb.acc{border-color:var(--acc);color:var(--acc);font-weight:600}
+.sb.del{color:var(--bad)}
+select.sb{padding:0 8px;min-width:130px}
+
+.page-h{margin:0 0 4px;font-size:22px;font-weight:600;letter-spacing:-.2px}
+.page-s{margin:0 0 14px;color:var(--muted);font-size:13px}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);line-height:1.6}
+.empty h2{margin:0 0 6px;color:var(--text);font-size:18px}
+
+footer{height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--panel);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+footer .l{display:flex;align-items:center;gap:14px;min-width:0}
+#msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#msg.err{padding:2px 8px;border-radius:6px;background:var(--badbg);color:var(--bad);font-weight:600}
+.link{background:none;border:0;color:var(--acc);font-size:12px;font-weight:600;padding:0}
+
+#logpanel{display:none;flex:none;height:220px;background:var(--panel);border-top:1px solid var(--line);flex-direction:column}
+#logpanel.show{display:flex}
+#logpanel .bar{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;color:var(--muted2);font-size:12px;border-bottom:1px solid var(--line2)}
+#logpanel pre{margin:0;padding:10px 16px;overflow:auto;flex:1;font:12px 'Geist Mono',ui-monospace,monospace;white-space:pre-wrap;color:var(--text2)}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);padding:20px;width:min(420px,92vw);box-shadow:0 12px 32px var(--sh2)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h3{margin:0 0 8px;font-size:16px}
+dialog p{margin:0 0 14px;color:var(--text2);line-height:1.5;font-size:13px}
+dialog input[type=text]{width:100%;height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line3);background:var(--sunken);margin-bottom:14px;font:13px 'Geist Mono',ui-monospace,monospace}
+.dbtns{display:flex;justify-content:flex-end;gap:8px}
+.dbtns button{height:36px;padding:0 16px;border-radius:9px;border:1px solid var(--line3);background:var(--panel);font-weight:500}
+.dbtns button.primary{background:var(--acc);border-color:var(--acc);color:var(--onacc);font-weight:600}
+
+#busy{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
+#busy.show{display:flex}
+#busy .bcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;width:min(420px,92vw);text-align:left;box-shadow:0 12px 32px var(--sh2)}
+#busy .bcard>b{font-size:15px}
+.pbar{position:relative;height:12px;border-radius:999px;background:var(--raised);margin:14px 0 6px;overflow:hidden;border:1px solid var(--line)}
+.pseg{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc);border-radius:999px;transition:width .25s ease}
+.pidle{position:absolute;top:0;bottom:0;border-radius:999px;background:repeating-linear-gradient(45deg,var(--acc) 0 8px,color-mix(in srgb,var(--acc) 45%,var(--panel)) 8px 16px);background-size:22px 22px;opacity:.85;animation:stripe 1s linear infinite}
+@keyframes stripe{to{background-position:22px 0}}
+.pnums{display:flex;justify-content:space-between;font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums}
+.pstages{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:13px}
+.pstages li{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.pstages li.run{color:var(--text);font-weight:600}
+.pstages li.done{color:var(--text2)}
+.pstages .mark{width:16px;text-align:center;font-weight:700}
+.pstages li.done .mark{color:var(--ok)}
+@media (prefers-reduced-motion:reduce){.pidle{animation:none}.pseg{transition:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.zwrap{display:flex;gap:16px;align-items:flex-start;flex:1;min-height:0}
+.zleft{flex:1;min-width:0;max-width:760px;height:100%;display:flex;flex-direction:column;min-height:0}
+.zside{flex:none;width:340px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 1px 2px var(--sh1);padding:16px;display:flex;flex-direction:column;gap:10px}
+.zside label{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--text2);font-size:13px}
+.zside select{width:170px;height:34px;border-radius:8px;border:1px solid var(--line3);background:var(--sunken);padding:0 8px;color:var(--muted)}
+.zside .note{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.zcount{padding:0 10px;font-size:13px}
+.editbtn{margin-left:auto;margin-right:8px;height:26px;padding:0 10px;border-radius:7px;border:1px solid var(--line3);background:var(--panel);font-size:12px;font-weight:500}
+.editbtn:hover{background:var(--raised)}
+dialog.zdlg{width:min(800px,96vw);padding:0;overflow:hidden}
+.zhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.zhead h3{margin:0;font-size:15px}
+.zx{width:32px;height:32px;border:0;border-radius:8px;background:transparent;font-size:20px;line-height:1;color:var(--text2)}
+.zx:hover{background:var(--raised)}
+.zbody{padding:16px 20px 6px}
+.zname{display:flex;align-items:center;gap:10px;margin:0 0 14px 0;font-size:13px;color:var(--text2)}
+.zname input{width:240px;height:36px;margin:0;padding:0 10px;border-radius:9px;border:1px solid var(--line3);background:var(--sunken);font:13px 'Geist',system-ui,sans-serif}
+.zcols{display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr) 64px;gap:10px;align-items:start}
+.zlab{margin:0 0 6px;font-size:12px;color:var(--muted2);font-weight:500;display:flex;justify-content:space-between}
+.zlist{height:340px;overflow:auto;border:1px solid var(--line3);border-radius:10px;background:var(--sunken)}
+.zrow{display:flex;gap:10px;align-items:center;height:26px;padding:0 10px;font-size:13px;cursor:default;user-select:none}
+.zrow .zn{width:34px;flex:none;text-align:right;font:12px 'Geist Mono',ui-monospace,monospace;color:var(--muted)}
+.zrow .zt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zrow:hover{background:var(--raised)}
+.zrow.on{background:var(--sel);color:var(--acc)}
+.zmid,.zside2{display:flex;flex-direction:column;gap:12px;padding-top:140px}
+.zside2{padding-top:140px}
+.zbtn{height:34px;border-radius:8px;border:1px solid var(--line3);background:var(--panel);font-size:13px;font-weight:500}
+.zbtn:hover:not(:disabled){background:var(--raised)}
+.zerr{min-height:20px;margin:10px 0 0;color:var(--bad);font-size:13px}
+.zhint{margin:0 0 4px;color:var(--muted);font-size:12px}
+.zfoot{display:flex;justify-content:center;gap:10px;padding:10px 20px 18px}
+.zfoot button{min-width:88px;height:36px;border-radius:9px;border:1px solid var(--line3);background:var(--panel);font-weight:500}
+.zfoot button.primary{background:var(--acc);border-color:var(--acc);color:var(--onacc);font-weight:600}
+.zfoot button:disabled{opacity:.4;cursor:default}
+.sopts{display:none;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 120px;gap:6px 24px;margin-top:14px;align-items:start}
+dialog.scan .sopts{display:grid}
+.scol{display:flex;flex-direction:column;gap:8px}
+.sf{display:flex;align-items:center;justify-content:flex-end;gap:10px;font-size:13px;color:var(--text2)}
+.sf select{width:150px;height:30px;border-radius:7px;border:1px solid var(--line3);background:var(--panel);padding:0 6px}
+.sf select:disabled{background:var(--sunken);color:var(--muted)}
+.sf input[type=checkbox]{width:18px;height:18px;margin:0 auto 0 0}
+.sbtns{align-items:stretch;gap:10px}
+.sbtns .zfoot{flex-direction:column;padding:0;gap:10px}
+.sbtns .zfoot #z-prev{margin-top:14px}
+.snote{grid-column:1 / -1;margin:2px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+dialog.scan .zlist{height:260px}
+
+.optdlg{width:min(800px,96vw);padding:0;overflow:hidden}
+.otabs{display:flex;flex-wrap:wrap;gap:2px 0;padding:10px 16px 0;border-bottom:1px solid var(--line)}
+.otab{height:32px;padding:0 11px;border:0;border-bottom:2px solid transparent;background:transparent;font-size:12.5px;color:var(--text2);border-radius:7px 7px 0 0}
+.otab:hover{background:var(--raised)}
+.otab[aria-selected=true]{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+.opanel{padding:18px 22px 6px;height:430px;overflow:auto}
+.oform{display:grid;grid-template-columns:minmax(150px,1fr) 190px;gap:9px 12px;align-items:center;max-width:430px;margin:0 auto}
+.oform.two{display:flex;gap:30px;max-width:none;justify-content:center;align-items:flex-start}
+.oform.two>.ocol{display:grid;grid-template-columns:minmax(150px,auto) 150px;gap:9px 12px;align-items:center}
+.oform.two>.ocol.checks{grid-template-columns:20px minmax(150px,auto)}
+.ol{text-align:right;font-size:13px;color:var(--text2)}
+.ol.dim{color:var(--muted)}
+.oc select,.oc input[type=text]{width:100%;height:30px;border-radius:7px;border:1px solid var(--line3);background:var(--panel);padding:0 8px;font-size:13px}
+.oc select:disabled,.oc input[type=text]:disabled{background:var(--sunken);color:var(--muted)}
+.oc input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--acc)}
+.ocheck{display:flex;align-items:center}
+.oform.checksonly{grid-template-columns:minmax(150px,1fr) 24px;max-width:340px}
+.unc{display:inline-block;margin-left:6px;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:var(--sel);color:var(--acc);font-size:10px;font-weight:700;cursor:help}
+.onote{margin:16px auto 0;max-width:560px;color:var(--muted);font-size:12px;line-height:1.55}
+.ogroups{display:flex;gap:16px;justify-content:center;align-items:flex-start}
+.ogcol{display:flex;flex-direction:column;gap:12px;width:300px}
+.ogroup{border:1px solid var(--line3);border-radius:9px;padding:6px 12px 10px;margin:0;min-width:0}
+.ogroup legend{padding:0 6px;font-size:12px;color:var(--muted2)}
+.ogroup .ochecks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.ogroup label{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.ogroup input{width:16px;height:16px;margin:0}
+.sec{max-width:900px}
+table.ro{width:100%;border-collapse:collapse}
+table.ro th{position:sticky;top:0;text-align:left;background:var(--sunken);color:var(--muted2);font-size:12px;font-weight:500;padding:10px 12px;border-bottom:1px solid var(--line)}
+table.ro td{padding:10px 12px;border-bottom:1px solid var(--line2)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="badge"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7h.01M9.2 4.8a4 4 0 0 0 0 4.4M14.8 4.8a4 4 0 0 1 0 4.4M6.6 2.6a7.4 7.4 0 0 0 0 8.8M17.4 2.6a7.4 7.4 0 0 1 0 8.8M12 9.5 8.5 21M12 9.5l3.5 11.5M10.3 15h3.4M7.5 21h9"/></svg></div>
+    Codeplug Studio
+  </div>
+  <div class="group">
+    <button class="tb" id="b-open" title="Open a YAML codeplug file">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>Open</button>
+    <button class="tb" id="b-save" title="Save (Ctrl+S)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM8 3v5h7V3M8 21v-7h8v7"/></svg>Save</button>
+    <button class="tb" id="b-saveas" title="Save as">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-7M17 3l4 4-8 8H9v-4z"/></svg>Save as</button>
+    <div class="fname"><span id="fname">—</span><span class="dot" id="dirtydot" hidden></span></div>
+  </div>
+  <div class="right">
+    <button class="iconbtn" id="b-theme" aria-label="Switch between light and dark theme" title="Switch theme">
+      <svg id="ic-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg id="ic-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <div class="chip"><i id="dmrdot"></i><span id="portchip">—</span></div>
+    <button class="btn" id="b-read">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Read</button>
+    <button class="btn primary" id="b-write">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9M7 14l5-5 5 5M4 3h16"/></svg>Write</button>
+  </div>
+</header>
+
+<div class="body">
+  <nav id="tree" aria-label="Codeplug sections"></nav>
+  <main id="main"></main>
+</div>
+
+<div id="logpanel"><div class="bar"><span>Radio log</span><button class="link" id="b-logclose">Close</button></div><pre id="logtext"></pre></div>
+<footer>
+  <div class="l"><span id="counts"></span><span id="msg"></span></div>
+  <button class="link" id="b-log">Radio log</button>
+</footer>
+
+<input type="file" id="filein" accept=".yaml,.yml,text/yaml" hidden>
+
+<dialog id="dlg"><h3 id="dlg-t"></h3><p id="dlg-p"></p><input type="text" id="dlg-in" hidden>
+  <div class="dbtns"><button id="dlg-no">Cancel</button><button class="primary" id="dlg-ok">OK</button></div></dialog>
+<dialog id="zonedlg" class="zdlg" aria-labelledby="z-title">
+  <div class="zhead"><h3 id="z-title">Zone Information</h3><button class="zx" id="z-x" aria-label="Close without applying">&times;</button></div>
+  <div class="zbody">
+    <label class="zname" for="z-name">Zone Name <input id="z-name" type="text" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <div class="zcols">
+      <div><div class="zlab">Available Channel</div><div class="zlist" id="z-avail" role="listbox" aria-multiselectable="true" aria-label="Available entries"></div></div>
+      <div class="zmid"><button class="zbtn" id="z-add" aria-label="Add selected channels to the zone">&gt;&gt;</button><button class="zbtn" id="z-rem" aria-label="Remove selected channels from the zone">&lt;&lt;</button></div>
+      <div><div class="zlab"><span>Channel Members</span><span id="z-count"></span></div><div class="zlist" id="z-mem" role="listbox" aria-multiselectable="true" aria-label="Entries in this list"></div></div>
+      <div class="zside2"><button class="zbtn" id="z-up">Up</button><button class="zbtn" id="z-down">Down</button></div>
+    </div>
+    <div class="sopts" id="z-sopts">
+      <div class="scol">
+        <label class="sf">CTC Scan Mode <select disabled aria-label="CTC Scan Mode (not stored in the file)"><option>—</option></select></label>
+        <label class="sf">Scan TX Mode <select disabled aria-label="Scan TX Mode (not stored in the file)"><option>—</option></select></label>
+        <label class="sf">Hang Time[s] <select disabled aria-label="Hang Time (not stored in the file)"><option>—</option></select></label>
+        <label class="sf">Priority Channel 1 <select id="z-pri1" disabled aria-label="Priority Channel 1 (view only)"></select></label>
+        <label class="sf">Priority Channel 2 <select id="z-pri2" disabled aria-label="Priority Channel 2 (view only)"></select></label>
+      </div>
+      <div class="scol">
+        <label class="sf">Designated Tx Channel <select id="z-revert" aria-label="Designated Tx Channel"></select></label>
+        <label class="sf">Priority Sweep Time[ms] <select disabled aria-label="Priority Sweep Time (not stored in the file)"><option>—</option></select></label>
+        <label class="sf">Talkback <input type="checkbox" id="z-talk" disabled aria-label="Talkback (not stored in the file)"></label>
+      </div>
+      <div class="scol sbtns" id="z-sbtns"></div>
+      <p class="snote">Greyed settings are stored in the radio but not in your YAML file, so they can't be shown or edited here. Priority channels are shown but not editable: QDMR stores them as a 4-bit number, and I can't confirm how the radio reads it.</p>
+    </div>
+    <p class="zerr" id="z-err" role="alert"></p>
+    <p class="zhint">Click to select, Ctrl or Shift for several. Double-click moves an entry. Previous and Next keep your changes to this list.</p>
+  </div>
+  <div class="zfoot" id="z-foot"><button class="primary" id="z-ok">OK</button><button id="z-cancel">Cancel</button><button id="z-prev">Previous</button><button id="z-next">Next</button></div>
+</dialog>
+<dialog id="optdlg" class="optdlg" aria-labelledby="o-title">
+  <div class="zhead"><h3 id="o-title">Optional Features</h3><button class="zx" id="o-x" aria-label="Close without applying">&times;</button></div>
+  <div class="otabs" id="o-tabs" role="tablist" aria-label="Optional feature groups"></div>
+  <div class="opanel" id="o-panel" role="tabpanel"></div>
+  <p class="zerr" id="o-err" role="alert" style="padding:0 22px"></p>
+  <div class="zfoot"><button class="primary" id="o-ok">OK</button><button id="o-cancel">Cancel</button></div>
+</dialog>
+<div id="busy"><div class="bcard" role="dialog" aria-modal="true" aria-labelledby="busy-t">
+  <b id="busy-t"></b>
+  <div class="pbar" id="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Progress"><div class="pseg" id="pfill"></div><div class="pidle" id="pidle" hidden></div></div>
+  <div class="pnums"><span id="busy-pct">Starting…</span><span id="busy-el"></span></div>
+  <ol class="pstages" id="busy-stages"></ol>
+  <p id="busy-phase" aria-live="polite" style="margin:10px 0 0;font-size:13px;line-height:1.45;min-height:38px"></p>
+  <p id="busy-p" style="margin:6px 0 0;color:var(--muted);font-size:12px"></p>
+</div></div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let S = null;            // state from the bridge
+let tab = 'channels';
+let picked = null;
+let addKind = 'fm';
+const open = { public: true, digital: true, analog: true };
+
+// ---------- bridge calls ----------
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CPS': '1' }, body: JSON.stringify(body) };
+  const res = await fetch(path, opt);
+  return res.json();
+}
+function setMsg(text, err) { const m = $('#msg'); m.textContent = text || ''; m.className = err ? 'err' : ''; }
+function take(r) { if (r && r.state) S = r.state; }
+
+// ---------- theme ----------
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t === 'dark' ? 'dark' : '';
+  $('#ic-sun').hidden = t !== 'dark'; $('#ic-moon').hidden = t === 'dark';
+  try { localStorage.setItem('cps-theme', t); } catch (e) {}
+}
+$('#b-theme').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// ---------- dialogs ----------
+function ask(title, text, ok, input) {
+  return new Promise((resolve) => {
+    $('#dlg-t').textContent = title; $('#dlg-p').textContent = text; $('#dlg-ok').textContent = ok || 'OK';
+    const inp = $('#dlg-in'); inp.hidden = !input; if (input) inp.value = input;
+    const d = $('#dlg');
+    const done = (v) => { d.close(); resolve(v); };
+    $('#dlg-ok').onclick = () => done(input ? inp.value : true);
+    $('#dlg-no').onclick = () => done(input ? null : false);
+    d.oncancel = () => resolve(input ? null : false);
+    d.showModal();
+    if (input) inp.focus();
+  });
+}
+let progTimer = null;
+function paintProgress(p) {
+  if (!p || !p.stages) return;
+  const stages = p.stages, step = p.step || 0;
+  const done = stages.slice(0, step).reduce((s, x) => s + x.weight, 0), cur = stages[step] || { weight: 0 };
+  const pct = Math.round((p.overall || 0) * 100);
+  $('#pfill').style.width = pct + '%';
+  // Moving stripes whenever the current step has no percentage yet (connecting, scanning, checking)
+  const idle = $('#pidle'), moving = p.active && !(p.percent > 0);
+  idle.hidden = !moving;
+  if (moving) { idle.style.left = (done * 100) + '%'; idle.style.width = (cur.weight * 100) + '%'; }
+  $('#pbar').setAttribute('aria-valuenow', pct);
+  $('#busy-pct').textContent = p.active ? (stages.length > 1 ? 'Step ' + (step + 1) + ' of ' + stages.length + ': ' + stages[step].label : stages[step].label) : 'Done';
+  $('#busy-el').textContent = p.elapsed != null ? p.elapsed + ' s' : '';
+  $('#busy-stages').innerHTML = stages.length > 1 ? stages.map((s) => `<li class="${s.state}"><span class="mark">${s.state === 'done' ? '✓' : s.state === 'run' ? '▸' : '·'}</span>${esc(s.label)}</li>`).join('') : '';
+  if (p.phase !== undefined) $('#busy-phase').textContent = p.phase;
+}
+const esc2 = (s) => String(s);
+async function pollProgress() { try { paintProgress(await api('/api/progress')); } catch (e) { /* the bridge is busy; try again */ } }
+function busy(on, title, text) {
+  $('#busy').classList.toggle('show', !!on);
+  $('#busy-t').textContent = title || ''; $('#busy-p').textContent = text || ''; $('#busy-phase').textContent = '';
+  clearInterval(progTimer); progTimer = null;
+  if (on) {
+    $('#pfill').style.width = '0%'; $('#pidle').hidden = false; $('#pidle').style.left = '0'; $('#pidle').style.width = '100%';
+    $('#busy-pct').textContent = 'Starting…'; $('#busy-el').textContent = ''; $('#busy-stages').innerHTML = '';
+    progTimer = setInterval(pollProgress, 400);
+  }
+}
+
+// ---------- tree ----------
+const TREE = [
+  { key: 'public', label: 'Public', items: [['channels','Channel'],['vfoa','VFO A'],['vfob','VFO B'],['zone','Zone'],['scan','Scan'],['roamzone','Roaming Zone'],['roamchan','Roaming Channel'],['radioinfo','Radio Information'],['option','Option Feature'],['keyfunc','Key Function'],['onekey','One Key Operation'],['aprs','APRS']] },
+  { key: 'digital', label: 'Digital', items: [['dmrid','DMR ID'],['contacts','Talk Groups'],['csv','CSV Contacts'],['rxgroups','RX Group List'],['emerg','Digital Emergency Systems'],['encrypt','Digital Encrypt Systems'],['quicktext','Quick Text messages']] },
+  { key: 'analog', label: 'Analog', items: [['dtmf','DTMF'],['twotone','Two Tone'],['fivetone','Five Tone'],['bdc','BDC1200'],['anacontacts','Analog Contacts']] }
+];
+const LIVE = new Set(['channels','contacts','zone','scan','dmrid','rxgroups','option']);
+const LABELS = {}; TREE.forEach((g) => g.items.forEach((i) => { LABELS[i[0]] = i[1]; }));
+
+function renderTree() {
+  let h = '<div class="root"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="10" height="14" rx="2"/><path d="M10 3v5M7 12h10"/></svg>DMR Radio</div>';
+  TREE.forEach((g) => {
+    h += `<button class="nb ${open[g.key] ? 'open' : ''}" data-group="${g.key}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>${g.label}</button>`;
+    if (open[g.key]) g.items.forEach((i) => { h += `<button class="ni ${tab === i[0] ? 'on' : ''} ${LIVE.has(i[0]) ? '' : 'todo'}" data-tab="${i[0]}">${esc(i[1])}</button>`; });
+  });
+  $('#tree').innerHTML = h;
+}
+$('#tree').onclick = (e) => {
+  const g = e.target.closest('[data-group]'); if (g) { open[g.dataset.group] = !open[g.dataset.group]; return renderTree(); }
+  const t = e.target.closest('[data-tab]'); if (t) { if (t.dataset.tab === 'option') { openOptions(); return; } tab = t.dataset.tab; picked = null; render(); }
+};
+
+// ---------- grids ----------
+const CH_COLS = '48px minmax(150px,1.4fr) 96px 112px 112px 84px 92px 100px 100px 78px minmax(130px,1fr) minmax(120px,1fr) 88px 70px';
+const CH_HEAD = ['No.','Name','Type','RX Frequency','TX Frequency','Power','Width','CTC/DCS Dec','CTC/DCS Enc','Color Code','Tx Contact','RX Group List','Time Slot','RX Only'];
+const CT_COLS = '48px minmax(180px,1.4fr) 140px 150px 80px';
+const CT_HEAD = ['No.','Name','Call Type','DMR ID','Ring'];
+const KIND_LABEL = { fm: 'Analog', am: 'AM', dmr: 'Digital' };
+
+function inp(sec, row, f, val, mono, bad) { return `<input class="cellin ${mono ? 'mono' : ''} ${bad ? 'bad' : ''}" data-sec="${sec}" data-id="${esc(row.id)}" data-f="${f}" value="${esc(val)}" aria-label="${f} of ${esc(row.name)}" spellcheck="false">`; }
+function sel(sec, row, f, val, opts) {
+  const o = opts.map((x) => { const v = Array.isArray(x) ? x[0] : x, l = Array.isArray(x) ? x[1] : x; return `<option value="${esc(v)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(l)}</option>`; }).join('');
+  return `<select class="cellin" data-sec="${sec}" data-id="${esc(row.id)}" data-f="${f}" aria-label="${f} of ${esc(row.name)}">${o}</select>`;
+}
+function off(txt) { return `<div class="off">${esc(txt)}</div>`; }
+
+function chRow(r, i) {
+  const m = S.model, fm = r.kind === 'fm', dmr = r.kind === 'dmr';
+  const contacts = [['', 'None']].concat(m.contactOptions.map((c) => [c.id, c.name]));
+  const groups = [['', 'None']].concat(m.groupOptions.map((g) => [g.id, g.name]));
+  return `<div class="grid grow ${r.id === picked ? 'sel' : ''}" style="grid-template-columns:${CH_COLS}" data-rowid="${esc(r.id)}">
+    <div><span class="num">${i + 1}</span></div>
+    <div>${inp('channels', r, 'name', r.name)}</div>
+    <div><span class="tag ${r.kind}">${KIND_LABEL[r.kind] || r.kind}</span></div>
+    <div>${inp('channels', r, 'rx', r.rx, true)}</div>
+    <div>${inp('channels', r, 'tx', r.tx, true)}</div>
+    <div>${sel('channels', r, 'power', r.power, m.powers)}</div>
+    ${fm ? `<div>${sel('channels', r, 'width', r.width, ['12.5KHz', '25KHz'])}</div>` : off(r.width || '—')}
+    ${fm ? `<div>${inp('channels', r, 'dec', r.dec, true)}</div>` : off('—')}
+    ${fm ? `<div>${inp('channels', r, 'enc', r.enc, true)}</div>` : off('—')}
+    ${dmr ? `<div>${inp('channels', r, 'cc', r.cc, true)}</div>` : off('—')}
+    ${dmr ? `<div>${sel('channels', r, 'contact', r.contact, contacts)}</div>` : off('—')}
+    ${dmr ? `<div>${sel('channels', r, 'group', r.group, groups)}</div>` : off('—')}
+    ${dmr ? `<div>${sel('channels', r, 'slot', r.slot, ['Slot 1', 'Slot 2'])}</div>` : off('—')}
+    <div><input class="chk" type="checkbox" data-sec="channels" data-id="${esc(r.id)}" data-f="rxOnly" ${r.rxOnly ? 'checked' : ''} aria-label="Receive only, ${esc(r.name)}"></div>
+  </div>`;
+}
+function ctRow(r, i) {
+  const dmr = r.kind === 'dmr';
+  return `<div class="grid grow ${r.id === picked ? 'sel' : ''}" style="grid-template-columns:${CT_COLS}" data-rowid="${esc(r.id)}">
+    <div><span class="num">${i + 1}</span></div>
+    <div>${inp('contacts', r, 'name', r.name)}</div>
+    ${dmr ? `<div>${sel('contacts', r, 'type', r.type, S.model.callTypes)}</div>` : off(r.kind.toUpperCase())}
+    ${dmr ? `<div>${inp('contacts', r, 'number', r.number, true)}</div>` : off(r.number || '—')}
+    <div><input class="chk" type="checkbox" data-sec="contacts" data-id="${esc(r.id)}" data-f="ring" ${r.ring ? 'checked' : ''} aria-label="Ring, ${esc(r.name)}"></div>
+  </div>`;
+}
+
+function btnRow(len, idx, addSel) {
+  return `<div class="btnrow">
+    ${addSel || ''}<button class="sb acc" data-act="add">Add</button>
+    <button class="sb del" data-act="del" ${idx < 0 ? 'disabled' : ''}>Delete</button>
+    <button class="sb" data-act="ins">Insert</button>
+    <button class="sb" data-act="up" ${idx <= 0 ? 'disabled' : ''}>Up</button>
+    <button class="sb" data-act="down" ${idx < 0 || idx >= len - 1 ? 'disabled' : ''}>Down</button>
+    <button class="sb" data-act="import">Import</button>
+    <a class="sb" href="/api/export" download>Export</a>
+  </div>`;
+}
+
+function gridPage(sec) {
+  const ch = sec === 'channels';
+  const rows = ch ? S.model.channels : S.model.contacts;
+  const idx = rows.findIndex((r) => r.id === picked);
+  const head = (ch ? CH_HEAD : CT_HEAD).map((h) => `<div>${h}</div>`).join('');
+  const body = rows.map((r, i) => (ch ? chRow(r, i) : ctRow(r, i))).join('');
+  const addSel = ch ? `<select class="sb" id="addkind" aria-label="Type of channel to add"><option value="fm" ${addKind === 'fm' ? 'selected' : ''}>Analog FM</option><option value="dmr" ${addKind === 'dmr' ? 'selected' : ''}>Digital (DMR)</option><option value="am" ${addKind === 'am' ? 'selected' : ''}>AM (air band)</option></select>` : '';
+  return `<div class="card" id="card"><div class="grid ghead" style="grid-template-columns:${ch ? CH_COLS : CT_COLS}">${head}</div>${body}</div>${btnRow(rows.length, idx, addSel)}`;
+}
+
+// ---------- zones and scan lists ----------
+const Z_COLS = '48px minmax(200px,1fr) 260px';
+const S_COLS = '48px minmax(160px,1fr) 190px 150px 150px 120px';
+const S_HEAD = ['No.', 'Name', 'Scan Number', 'CTC Scan Mode', 'Scan TX Mode', 'Stay Time[s]'];
+function editCell(kind, z) {
+  return `<span class="zcount">${z.members.length}</span><button class="editbtn" data-edit="${esc(z.id)}" data-kind="${kind}" aria-label="Edit the channels in ${esc(z.name)}">Edit members…</button>`;
+}
+function zRow(z, i) {
+  return `<div class="grid grow ${z.id === picked ? 'sel' : ''}" style="grid-template-columns:${Z_COLS}" data-rowid="${esc(z.id)}" data-zone="${esc(z.id)}" data-kind="zones">
+    <div><span class="num">${i + 1}</span></div>
+    <div>${inp('zones', z, 'name', z.name)}</div>
+    <div>${editCell('zones', z)}</div>
+  </div>`;
+}
+function sRow(z, i) {
+  const na = (why) => `<div class="off" title="${why}">—</div>`;
+  const why = 'Stored in the radio but not in the YAML file, so it cannot be shown or edited here.';
+  return `<div class="grid grow ${z.id === picked ? 'sel' : ''}" style="grid-template-columns:${S_COLS}" data-rowid="${esc(z.id)}" data-zone="${esc(z.id)}" data-kind="scanLists">
+    <div><span class="num">${i + 1}</span></div>
+    <div>${inp('scanLists', z, 'name', z.name)}</div>
+    <div>${editCell('scanLists', z)}</div>
+    ${na(why)}${na(why)}${na(why)}
+  </div>`;
+}
+function rowHtml(sec, row, i) { return sec === 'channels' ? chRow(row, i) : sec === 'contacts' ? ctRow(row, i) : sec === 'zones' ? zRow(row, i) : sRow(row, i); }
+const SECTION = { channels: 'channels', contacts: 'contacts', zone: 'zones', scan: 'scanLists' };
+const curSec = () => SECTION[tab];
+
+function zonePage() {
+  const zs = S.model.zones, idx = zs.findIndex((z) => z.id === picked);
+  const head = ['No.', 'Name', 'Channel Number'].map((h) => `<div>${h}</div>`).join('');
+  const sideRow = (l) => `<label>${l}<select disabled aria-label="${l} (not stored in the file)"><option>—</option></select></label>`;
+  return `<div class="zwrap"><div class="zleft">
+    <div class="card" id="card"><div class="grid ghead" style="grid-template-columns:${Z_COLS}">${head}</div>${zs.map(zRow).join('')}</div>
+    ${btnRow(zs.length, idx, '')}
+  </div>
+  <aside class="zside" aria-label="Current zone and channel">
+    ${sideRow('Current Zone A')}${sideRow('Current Channel A')}${sideRow('Current Zone B')}${sideRow('Current Channel B')}
+    <p class="note">The radio keeps its own current zone and channel. Your YAML file has no entry for them, so they can't be edited here.</p>
+  </aside></div>`;
+}
+
+function scanPage() {
+  const ss = S.model.scanLists, idx = ss.findIndex((z) => z.id === picked);
+  const head = S_HEAD.map((h) => `<div>${h}</div>`).join('');
+  return `<div class="zwrap"><div class="zleft" style="max-width:none">
+    <div class="card" id="card"><div class="grid ghead" style="grid-template-columns:${S_COLS}">${head}</div>${ss.map(sRow).join('')}</div>
+    ${btnRow(ss.length, idx, '')}
+    <p class="note" style="margin:12px 2px 0;color:var(--muted);font-size:12px;line-height:1.5;max-width:760px">CTC Scan Mode, Scan TX Mode and Stay Time are stored in the radio but not in your YAML file, so they can't be shown or edited here. QDMR leaves them alone when it writes, so by default they stay as the radio has them for each list position. If you reorder the lists, those three settings stay at their positions.</p>
+  </div></div>`;
+}
+
+function roPage(title, sub, heads, rows) {
+  return `<div class="sec"><h1 class="page-h">${title}</h1><p class="page-s">${sub}</p></div>
+  <div class="card"><table class="ro"><thead><tr>${heads.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+function render() {
+  renderTree();
+  const main = $('#main');
+  $('#fname').textContent = S ? S.file : '—';
+  $('#dirtydot').hidden = !(S && S.dirty);
+  $('#portchip').textContent = S ? `${S.com} · ${S.radio}` : '—';
+  $('#dmrdot').className = S && S.dmrconf ? '' : 'off';
+  $('#dmrdot').parentElement.title = S && S.dmrconf ? 'dmrconf found' : 'dmrconf not found: start the server with --dmrconf PATH';
+  if (!S) { main.innerHTML = '<div class="empty"><div>Cannot reach the Codeplug Studio bridge.<br>Check that server.py is still running.</div></div>'; return; }
+  if (!S.loaded) {
+    main.innerHTML = '<div class="empty"><div><h2>No codeplug open</h2>Use <b>Read</b> to load it from the radio,<br>or <b>Open</b> a YAML file saved with dmrconf or QDMR.</div></div>';
+    $('#counts').textContent = ''; return;
+  }
+  const m = S.model;
+  $('#counts').textContent = `${m.channels.length} channels · ${m.contacts.length} contacts · ${m.zones.length} zones · ${m.scanLists.length} scan lists${S.dirty ? ' · unsaved changes' : ''}`;
+  if (tab === 'channels') main.innerHTML = gridPage('channels');
+  else if (tab === 'contacts') main.innerHTML = gridPage('contacts');
+  else if (tab === 'zone') main.innerHTML = zonePage();
+  else if (tab === 'scan') main.innerHTML = scanPage();
+  else if (tab === 'rxgroups') main.innerHTML = roPage('RX Group List', 'Read-only in version 1.', ['Name', 'Contacts'], m.groupLists.map((g) => [g.name, g.count]));
+  else if (tab === 'dmrid') main.innerHTML = roPage('DMR ID', 'Read-only in version 1.', ['Name', 'Number'], m.radioIds.map((r) => [r.name, r.number]));
+  else main.innerHTML = `<div class="empty"><div><h2>${esc(LABELS[tab] || '')}</h2>Not editable in version 1.<br>The data in your file is kept as it is when you save and write.</div></div>`;
+}
+
+// ---------- editing ----------
+$('#main').addEventListener('change', async (e) => {
+  const el = e.target;
+  if (el.id === 'addkind') { addKind = el.value; return; }
+  if (!el.dataset.f) return;
+  const value = el.type === 'checkbox' ? el.checked : el.value;
+  const sec = el.dataset.sec;
+  const r = await api('/api/edit', { section: sec, id: el.dataset.id, field: el.dataset.f, value });
+  if (r.ok) {
+    const list = S.model[sec];
+    const i = list.findIndex((x) => x.id === r.row.id); if (i >= 0) list[i] = r.row;
+    S.dirty = true; setMsg('');
+    const rowEl = document.querySelector(`[data-rowid="${CSS.escape(r.row.id)}"]`);
+    if (rowEl) { const html = rowHtml(sec, r.row, i); const t = document.createElement('div'); t.innerHTML = html; rowEl.replaceWith(t.firstElementChild); }
+    $('#dirtydot').hidden = false;
+    $('#counts').textContent = `${S.model.channels.length} channels · ${S.model.contacts.length} contacts · ${S.model.zones.length} zones · ${S.model.scanLists.length} scan lists · unsaved changes`;
+  } else {
+    setMsg(r.error || 'Could not apply that change.', true);
+    const rowEl = document.querySelector(`[data-rowid="${CSS.escape(el.dataset.id)}"]`);
+    const list = S.model[sec]; const i = list.findIndex((x) => x.id === el.dataset.id);
+    if (rowEl && i >= 0) { const t = document.createElement('div'); t.innerHTML = rowHtml(sec, list[i], i); rowEl.replaceWith(t.firstElementChild); }
+  }
+});
+$('#main').addEventListener('click', (e) => {
+  const eb = e.target.closest('[data-edit]'); if (eb) openList(eb.dataset.kind, eb.dataset.edit);
+});
+$('#main').addEventListener('dblclick', (e) => {
+  if (e.target.closest('input,select,button')) return;
+  const row = e.target.closest('[data-zone]'); if (row) openList(row.dataset.kind, row.dataset.zone);
+});
+$('#main').addEventListener('click', async (e) => {
+  const act = e.target.closest('[data-act]');
+  const row = e.target.closest('[data-rowid]');
+  if (row && !act && picked !== row.dataset.rowid) { picked = row.dataset.rowid; document.querySelectorAll('.grow.sel').forEach((x) => x.classList.remove('sel')); row.classList.add('sel'); updateButtons(); }
+  if (!act) return;
+  const sec = curSec();
+  const a = act.dataset.act;
+  if (a === 'import') return $('#filein').click();
+  let r;
+  if (a === 'add' || a === 'ins') r = await api('/api/add', { section: sec, kind: addKind, before: a === 'ins' ? picked : null });
+  else if (a === 'del') {
+    const name = (S.model[sec].find((x) => x.id === picked) || {}).name;
+    const why = (sec === 'zones' || sec === 'scanLists') ? 'The channels in it are not deleted.' : 'Zones, scan lists and other places that point to it are cleaned up too.';
+    if (!await ask('Delete this item?', `"${name}" will be removed. ${why}`, 'Delete')) return;
+    r = await api('/api/delete', { section: sec, id: picked });
+  } else if (a === 'up' || a === 'down') r = await api('/api/move', { section: sec, id: picked, delta: a === 'up' ? -1 : 1 });
+  if (!r) return;
+  if (r.ok) { take(r); if ((a === 'add' || a === 'ins') && r.id) picked = r.id; if (a === 'del') picked = null; setMsg(a === 'del' && r.scrubbed ? `Removed ${r.scrubbed} reference(s) to the deleted item.` : ''); render(); const sel = document.querySelector('.grow.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' }); }
+  else setMsg(r.error, true);
+});
+function updateButtons() {
+  const sec = curSec(), rows = S.model[sec], idx = rows.findIndex((r) => r.id === picked);
+  const set = (a, dis) => { const b = document.querySelector(`[data-act="${a}"]`); if (b) b.disabled = dis; };
+  set('del', idx < 0); set('up', idx <= 0); set('down', idx < 0 || idx >= rows.length - 1);
+}
+
+
+// ---------- Zone / Scan Information window (like the factory dialogs) ----------
+// One dialog serves both: `kind` is 'zones' or 'scanLists'.
+const LISTKIND = {
+  zones: { title: 'Zone Information', items: () => S.model.zones, max: () => S.model.limits.zoneMembers, nameMax: () => S.model.limits.zoneName, url: '/api/zone/set', what: 'zone' },
+  scanLists: { title: 'Scan Information', items: () => S.model.scanLists, max: () => S.model.limits.scanMembers, nameMax: () => S.model.limits.scanName, url: '/api/scan/set', what: 'scan list' }
+};
+const SEL = '@selected';
+let zd = null;
+const chNum = (id) => (id === SEL ? 0 : S.model.channels.findIndex((c) => c.id === id) + 1);
+const chName = (id) => { if (id === SEL) return 'Current Channel'; const c = S.model.channels.find((x) => x.id === id); return c ? c.name : id; };
+const lk = () => LISTKIND[zd.kind];
+const zoneIdx = () => lk().items().findIndex((z) => z.id === zd.id);
+const availIds = () => {
+  const inz = new Set(zd.members);
+  const ids = S.model.channels.map((c) => c.id).filter((id) => !inz.has(id));
+  return zd.kind === 'scanLists' && !inz.has(SEL) ? [SEL].concat(ids) : ids;
+};
+
+function fillScanOptions() {
+  const none = (label) => `<option value="">${label}</option>`;
+  const chans = S.model.channels.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  const cur = (v) => (v === SEL ? 'Current Channel' : (S.model.channels.find((c) => c.id === v) || {}).name || 'None');
+  // Designated Tx Channel: None, every channel; "Current Channel" only if the file already uses it
+  $('#z-revert').innerHTML = none('None') + (zd.revert === SEL ? `<option value="${SEL}">Current Channel</option>` : '') + chans;
+  $('#z-revert').value = zd.revert;
+  // Priority channels are view only
+  $('#z-pri1').innerHTML = `<option>${esc(zd.primary ? cur(zd.primary) : 'None')}</option>`;
+  $('#z-pri2').innerHTML = `<option>${esc(zd.secondary ? cur(zd.secondary) : 'None')}</option>`;
+}
+function openList(kind, id) {
+  const z = LISTKIND[kind].items().find((x) => x.id === id); if (!z) return;
+  zd = { kind, id, name: z.name, members: z.members.filter((m) => m === SEL || chNum(m) > 0), revert: z.revert || '', primary: z.primary || '', secondary: z.secondary || '', sel: { avail: new Set(), mem: new Set() }, anchor: { avail: null, mem: null } };
+  $('#z-name').value = zd.name; $('#z-name').maxLength = lk().nameMax(); $('#z-err').textContent = '';
+  const d = $('#zonedlg'), scan = kind === 'scanLists';
+  d.classList.toggle('scan', scan);
+  document.querySelector('label.zname').firstChild.textContent = scan ? 'Scan Name ' : 'Zone Name ';
+  document.querySelector('.zlab').textContent = 'Available Channel';
+  document.querySelectorAll('.zlab')[1].firstElementChild.textContent = scan ? 'Scan Channel Members' : 'Channel Members';
+  const foot = $('#z-foot');
+  if (scan) { $('#z-sbtns').appendChild(foot); fillScanOptions(); } else if (foot.parentElement !== d) { d.appendChild(foot); }
+  $('#z-talk').indeterminate = true;
+  renderZone();
+  if (!d.open) d.showModal();
+}
+function zlist(ids, which) {
+  return ids.map((id) => { const on = zd.sel[which].has(id);
+    return `<div class="zrow ${on ? 'on' : ''}" role="option" aria-selected="${on}" tabindex="0" data-which="${which}" data-cid="${esc(id)}"><span class="zn">${chNum(id)}</span><span class="zt">${esc(chName(id))}</span></div>`; }).join('');
+}
+function renderZone() {
+  const i = zoneIdx(), n = lk().items().length, lim = lk().max();
+  $('#z-title').textContent = `${lk().title} ${i + 1}`;
+  $('#z-avail').innerHTML = zlist(availIds(), 'avail');
+  $('#z-mem').innerHTML = zlist(zd.members, 'mem');
+  $('#z-count').textContent = `${zd.members.length} / ${lim}`;
+  $('#z-prev').disabled = i <= 0; $('#z-next').disabled = i >= n - 1;
+}
+function zpick(which, id, e) {
+  const ids = which === 'avail' ? availIds() : zd.members, set = zd.sel[which];
+  if (e.shiftKey && zd.anchor[which] && ids.includes(zd.anchor[which])) {
+    const a = ids.indexOf(zd.anchor[which]), b = ids.indexOf(id), lo = Math.min(a, b), hi = Math.max(a, b);
+    if (!(e.ctrlKey || e.metaKey)) set.clear();
+    ids.slice(lo, hi + 1).forEach((x) => set.add(x));
+  } else if (e.ctrlKey || e.metaKey) { if (set.has(id)) set.delete(id); else set.add(id); zd.anchor[which] = id; }
+  else { set.clear(); set.add(id); zd.anchor[which] = id; }
+  renderZone();
+}
+function zAdd(ids) {
+  const lim = lk().max(); ids = ids || availIds().filter((id) => zd.sel.avail.has(id));
+  const room = lim - zd.members.length;
+  $('#z-err').textContent = ids.length > room ? `A ${lk().what} holds up to ${lim} entries.` : '';
+  ids = ids.slice(0, Math.max(room, 0));
+  zd.members = zd.members.concat(ids); zd.sel.avail.clear(); zd.sel.mem = new Set(ids); renderZone();
+}
+function zRem(ids) {
+  ids = ids || zd.members.filter((id) => zd.sel.mem.has(id)); const drop = new Set(ids);
+  zd.members = zd.members.filter((id) => !drop.has(id)); zd.sel.mem.clear(); $('#z-err').textContent = ''; renderZone();
+}
+function zMove(delta) {
+  const m = zd.members.slice(), s = zd.sel.mem;
+  if (delta < 0) { for (let i = 1; i < m.length; i++) if (s.has(m[i]) && !s.has(m[i - 1])) [m[i - 1], m[i]] = [m[i], m[i - 1]]; }
+  else { for (let i = m.length - 2; i >= 0; i--) if (s.has(m[i]) && !s.has(m[i + 1])) [m[i + 1], m[i]] = [m[i], m[i + 1]]; }
+  zd.members = m; renderZone();
+}
+async function zApply() {
+  const body = { id: zd.id, name: $('#z-name').value, members: zd.members };
+  if (zd.kind === 'scanLists') body.revert = $('#z-revert').value;
+  const r = await api(lk().url, body);
+  if (r.ok) { take(r); return true; }
+  $('#z-err').textContent = r.error || 'Could not apply the changes.'; return false;
+}
+function zClose() { const d = $('#zonedlg'); if (d.open) d.close(); zd = null; render(); }
+async function zStep(delta) {
+  const items = lk().items(), i = zoneIdx(), j = i + delta, kind = zd.kind;
+  if (j < 0 || j >= items.length) return;
+  if (await zApply()) openList(kind, LISTKIND[kind].items()[j].id);
+}
+$('#z-name').addEventListener('input', () => { $('#z-err').textContent = ''; });
+$('#z-add').onclick = () => zAdd(); $('#z-rem').onclick = () => zRem();
+$('#z-up').onclick = () => zMove(-1); $('#z-down').onclick = () => zMove(1);
+$('#z-ok').onclick = async () => { if (await zApply()) zClose(); };
+$('#z-cancel').onclick = zClose; $('#z-x').onclick = zClose;
+$('#zonedlg').addEventListener('cancel', () => { zd = null; setTimeout(render, 0); });
+$('#z-prev').onclick = () => zStep(-1); $('#z-next').onclick = () => zStep(1);
+
+// Double-click. The lists are redrawn on the first click, so the browser's own "dblclick" event
+// would land on a node that no longer exists. Count clicks ourselves instead (e.detail is the
+// browser's click count; the timer covers synthetic clicks).
+let lastClick = { t: 0, id: null, which: null };
+function zRowEvent(e, fn) { const r = e.target.closest('.zrow'); if (r) fn(r.dataset.which, r.dataset.cid); }
+$('#zonedlg').addEventListener('click', (e) => zRowEvent(e, (w, id) => {
+  const now = Date.now();
+  const dbl = e.detail === 2 || (e.detail < 2 && lastClick.id === id && lastClick.which === w && now - lastClick.t < 350);
+  lastClick = dbl ? { t: 0, id: null, which: null } : { t: now, id, which: w };
+  if (dbl) return w === 'avail' ? zAdd([id]) : zRem([id]);
+  zpick(w, id, e);
+}));
+$('#zonedlg').addEventListener('keydown', (e) => { if (e.key === 'Enter') zRowEvent(e, (w, id) => (w === 'avail' ? zAdd([id]) : zRem([id]))); });
+
+
+// ---------- Optional Features window (factory "Option Feature") ----------
+// Same twelve tabs and labels as the factory CPS. A field is live only when QDMR stores it in the
+// YAML file (id = the bridge's setting id). Everything else is drawn greyed out.
+const NO = (l, c, x) => Object.assign({ l, c: c || 'sel' }, x || {});
+const CHK = (l, id) => ({ l, c: 'chk', id });
+const OPT_TABS = [
+  { k: 'power', t: 'Power on/off', rows: [
+    NO('Auto Power Off'),
+    NO('Power On Interface', 'sel', { id: 'bootDisplay', opts: [['Image', 'Power On Picture'], ['Text', 'Power On Display']] }),
+    NO('Power On Display Line 1', 'txt', { id: 'bootMsg1', onlyWhen: ['bootDisplay', 'Text'] }),
+    NO('Power On Display Line 2', 'txt', { id: 'bootMsg2', onlyWhen: ['bootDisplay', 'Text'] }),
+    CHK('Allow Reset', 'allowReset')] },
+  { k: 'alert', t: 'Alert Tone', rows: [
+    NO('Analog Roger Tone'), CHK('Radio Silent', 'silent'), CHK('Key Tone', 'keyTone'), CHK('SMS Alert', 'smsTone'),
+    CHK('Group Call Tone'), CHK('Private Call Tone', 'privateCallTone'), CHK('Call End Tone', 'callEndTone'),
+    CHK('Talk Permit Tone', 'talkPermitTone'), CHK('StartUp Sound', 'bootTone'), CHK('Voice Prompt', 'voicePrompt'), CHK('Battery Low')] },
+  { k: 'display', t: 'Display', rows: [
+    CHK('Volume Change Prompt'), CHK('Time Display'), NO('Date Display Format'), NO('Backlight Brightness'), NO('Auto Backlight Duration'),
+    NO('Menu Exit Time[s]'), NO('Call Display Color'), NO('Standby Character Color'), NO('A Channel Name Color'), NO('B Channel Name Color'),
+    NO('Zone A Color'), NO('Zone B Color')] },
+  { k: 'gps', t: 'GPS', rows: [CHK('GPS Switch'), NO('GPS Mode'), NO('Time Zone'), NO('Measure Period Interval[s]'), NO('GPS Display Format')],
+    note: 'GPS Switch is greyed because QDMR does not export it yet. It is on in the radio now: QDMR and NeonPlug read it as on, and your factory file simply predates turning GPS on. It is planned for the next patch.' },
+  { k: 'record', t: 'Record', rows: [CHK('Record Switch'), NO('Record Type')] },
+  { k: 'digital', t: 'Digital', two: true,
+    left: [
+      NO('Call Hold Time[s]', 'sel', { id: 'callHold', ro: true }), NO('Active Wait Time[ms]'), NO('Active Retries Time'),
+      NO('Pre-Carrier Time[ms]', 'sel', { id: 'preCarrier', ro: true }),
+      NO('SMS Format', 'sel', { id: 'smsFormat', opts: [['Motorola', 'M-SMS'], ['Hytera', 'H-SMS'], ['DMR', 'DMR']] }),
+      NO('Remote Monitor Time[s]'),
+      NO('Name Data Format', 'sel', { id: 'nameFormat', opts: [['Iso8', 'ISO 8bit'], ['Unicode', 'Unicode']] }),
+      NO('Send TX Name', 'sel', { id: 'sendTxName', bool: true, opts: [['false', 'No'], ['true', 'Yes']] }),
+      NO('Name Display Priority')],
+    right: [CHK('Radio Disable Decode'), CHK('Remote Monitor Decode'), CHK('Call Alert Decode'), CHK('Radio Enable Decode'), CHK('Radio Check Decode'),
+      CHK('Missed Call Alert'), CHK('Private Call Match', 'privateMatch'), CHK('Group Call Match', 'groupMatch')] },
+  { k: 'work', t: 'Work Mode', rows: [CHK('Only Channel Mode'), NO('Work Mode(A)'), NO('Work Mode(B)'), NO('A Channel Display Mode'), NO('B Channel Display Mode'),
+    NO('Main Channel Setting'), NO('Dual Watch Mode'), NO('Dual Watch Hang Time[ms]')],
+    note: 'Work Mode(A), Work Mode(B) and Main Channel Setting are left alone: QDMR reads them differently from your factory file, and the radio can change them from its own keys, so the factory file may be older than the radio.' },
+  { k: 'other', t: 'Other', rows: [CHK('Disable All LEDs'), CHK('Weather Alarm'), NO('TOT[s]'), NO('TOT Pre Time[s]'), NO('VOX Level'),
+    NO('VOX Delay Time[s]', 'sel', { id: 'voxDelay', ro: true }), NO('Language'), NO('Power Save'), NO('Tail Noise Reduction'), NO('TBST'),
+    NO('Analog MIC Level'), NO('Digital MIC Level')],
+    note: 'TOT, VOX Level and the two MIC levels are left alone: QDMR reads TOT, VOX and mic values from this radio that differ from what the factory CPS shows for the same file, so I cannot tell which is right. Some may have been changed on the radio itself after that file was saved. They are not changed when you save or write.' },
+  { k: 'vfo', t: 'VFO Scan', rows: [NO('Scan Recovery Type'), NO('Scan Freq Upper(VHF)(MHz)', 'txt'), NO('Scan Freq Lower(VHF)(MHz)', 'txt'), NO('Scan Freq Upper(UHF)(MHz)', 'txt'), NO('Scan Freq Lower(UHF)(MHz)', 'txt')] },
+  { k: 'password', t: 'Password', rows: [
+    { l: 'Power-on Password', c: 'pw', id: 'powerOnPassword' }, { l: 'Read Data Password', c: 'pw' }, { l: 'Write Data Password', c: 'pw' }],
+    note: 'Passwords are view only here. A wrong password can lock you out of the radio, so they should be set in the factory CPS.' },
+  { k: 'lone', t: 'Lone Work', rows: [CHK('Lone Work'), NO('Response[min]'), NO('Reminder Time[s]'), NO('Work Mode'), NO('Select Alert Tone')] },
+  { k: 'menu', t: 'Menu', groups: [[
+      ['Zone', ['Zone List', 'New Zone']],
+      ['Enhance Business', ['Call Alert', 'Radio Check', 'Remote Monitor', 'Radio Enable', 'Radio Disable', 'Measure Period']],
+      ['Call Log', ['Missed Call', 'Answered Call', 'Sent Call', 'Del Log']],
+      ['Program', ['RX Frequency', 'TX Frequency', 'CTC/DCS', 'TX Contact', 'Color Code', 'Time Slot', 'Radio ID', 'Radio Name', 'Channel Type', 'TDMA Direct Mode', 'RX Group List', 'Add Channel', 'Channel Name']]
+    ], [
+      ['Digital Contact', ['Add Contact', 'Del Contact', 'Edit Contact', 'Functionality', 'Send Message', 'Manual Dial', 'CSV Contacts']],
+      ['Radio Setting', ['Talkaround', 'Alert Tone', 'TX Power', 'Start Display', 'Lang Select', 'Match Private', 'Display Mode', 'Match Group', 'SMS Format', 'FM Radio', 'Sub Channel Mode', 'Power Save', 'GPS', 'APRS', 'Record']]
+    ]] }
+];
+
+// Settings that the patched QDMR exports in `settings: dm32uv:`. label -> [id, options, how sure we are].
+// "strong" = distinctive value matched the factory CPS; "moderate"/"weak" = matched, but neighbouring flags
+// have the same value, so the mapping is not yet confirmed (see qdmr_patch/STEP1.md).
+const COLOR_OPTS = ['White', 'Black', 'Orange', 'Red', 'Yellow', 'Green', 'Cyan', 'Blue'].map((c) => [c, c]);
+const DM_BIND = {
+  'Auto Power Off': ['autoPowerOff', [['Off', 'Off'], ['Min30', '30 min'], ['Min60', '60 min'], ['Hours2', '2 hours'], ['Hours4', '4 hours'], ['Hours8', '8 hours']], 'weak'],
+  'Analog Roger Tone': ['fmRogerTone', [['Off', 'Off'], ['Beep', 'Beep'], ['BDC', 'BDC']], 'weak'],
+  'Group Call Tone': ['groupCallTone', null, 'moderate'],
+  'Battery Low': ['lowBatteryTone', null, 'moderate'],
+  'Volume Change Prompt': ['showVolumeChange', null, 'moderate'],
+  'Time Display': ['showClock', null, 'moderate'],
+  'Date Display Format': ['dateFormat', [['YearMonthDay', 'y/m/d'], ['DayMonthYear', 'd/m/y']], 'moderate'],
+  'Auto Backlight Duration': ['backlightDuration', [['Always', 'Always on'], ['Sec5', '5 s'], ['Sec10', '10 s'], ['Sec15', '15 s'], ['Sec20', '20 s'], ['Sec25', '25 s'], ['Sec30', '30 s'], ['Min1', '1 min'], ['Min2', '2 min'], ['Min3', '3 min'], ['Min4', '4 min'], ['Min5', '5 min']], 'strong'],
+  'Call Display Color': ['callColor', COLOR_OPTS, 'strong'],
+  'Standby Character Color': ['standbyColor', COLOR_OPTS, 'strong'],
+  'A Channel Name Color': ['channelNameAColor', COLOR_OPTS, 'strong'],
+  'B Channel Name Color': ['channelNameBColor', COLOR_OPTS, 'strong'],
+  'Zone A Color': ['zoneNameAColor', COLOR_OPTS, 'strong'],
+  'Zone B Color': ['zoneNameBColor', COLOR_OPTS, 'strong'],
+  'GPS Display Format': ['positionFormat', [['DecimalDegrees', 'Decimal degrees'], ['DegreesMinutesSeconds', 'Degree/Min/Sec']], 'moderate'],
+  'Record Switch': ['recordingEnabled', null, 'weak'],
+  'Record Type': ['recordMode', [['Receive', 'Receive Record'], ['Transmit', 'Transmit Record'], ['Both', 'Both']], 'weak'],
+  'Active Retries Time': ['activeRetries', [1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)]), 'strong'],
+  'Radio Disable Decode': ['radioDisableDecode', null, 'weak'],
+  'Remote Monitor Decode': ['remoteMonitorDecode', null, 'weak'],
+  'Call Alert Decode': ['callAlertDecode', null, 'moderate'],
+  'Radio Enable Decode': ['radioEnableDecode', null, 'weak'],
+  'Radio Check Decode': ['radioCheckDecode', null, 'moderate'],
+  'Missed Call Alert': ['missedCallAlert', null, 'moderate'],
+  'Only Channel Mode': ['onlyChannelMode', null, 'weak'],
+  'A Channel Display Mode': ['displayModeA', [['Frequency', 'Frequency'], ['ChannelName', 'Channel']], 'moderate'],
+  'B Channel Display Mode': ['displayModeB', [['Frequency', 'Frequency'], ['ChannelName', 'Channel']], 'moderate'],
+  'Dual Watch Mode': ['dualWatchMode', [['SingleVFO', 'Single VFO'], ['DoubleStandby', 'Double Wait'], ['SingleStandby', 'Single Wait']], 'moderate'],
+  'Disable All LEDs': ['allLEDsDisabled', null, 'weak'],
+  'Weather Alarm': ['weatherAlarm', null, 'moderate'],
+  'Power Save': ['powerSave', [['Off', '1:1 (off)'], ['Percent50', '1:2'], ['Percent66', '1:3'], ['Percent75', '1:4']], 'moderate'],
+  'Tail Noise Reduction': ['tailNoiseReduction', [['Off', 'Off'], ['Deg120', '120 deg'], ['Deg180', '180 deg'], ['Hz55', '55Hz']], 'strong'],
+  'TBST': ['tbst', [['Hz1000', '1000Hz'], ['Hz1450', '1450Hz'], ['Hz1750', '1750Hz'], ['Hz2100', '2100Hz']], 'strong']
+};
+OPT_TABS.forEach((T) => (T.rows || [].concat(T.left || [], T.right || [])).forEach((r) => {
+  const b = DM_BIND[r.l];
+  if (!b || r.id) return;
+  r.id = 'dm:' + b[0]; r.sure = b[2];
+  if (b[1]) { r.opts = b[1]; r.c = 'sel'; }
+}));
+const UTC_OPTS = Array.from({ length: 26 }, (_, i) => { const h = i - 12; return [String(h), h === 0 ? 'UTC' : 'UTC ' + (h < 0 ? '-' : '+') + Math.abs(h) + ':00']; });
+Object.assign(DM_BIND, {
+  'Time Zone': ['utcOffset', UTC_OPTS, 'strong'],  // confirmed on the radio: raw 11 shows UTC -1:00, raw 20 shows UTC +8:00
+  'GPS Mode': ['gpsMode', [['GPS', 'GPS'], ['Beidou', 'BDS'], ['GPS+Beidou', 'GPS+BDS']], 'moderate'],
+  'Measure Period Interval[s]': ['gpsIntervalSeconds', null, 'moderate'],
+  'Backlight Brightness': ['backlightBrightness', [1, 2, 3, 4, 5, 6].map((n) => [String(n), String(n)]), 'moderate'],
+  'Active Wait Time[ms]': ['activeWaitTimeMs', null, 'moderate']
+});
+const NUM_TXT = { 'Measure Period Interval[s]': '5 to 255', 'Active Wait Time[ms]': '300 to 4800, steps of 30' };
+OPT_TABS.forEach((T) => (T.rows || [].concat(T.left || [], T.right || [])).forEach((r) => {
+  const b = DM_BIND[r.l];
+  if (!b || r.id || !['Time Zone', 'GPS Mode', 'Measure Period Interval[s]', 'Backlight Brightness', 'Active Wait Time[ms]'].includes(r.l)) return;
+  r.id = 'dm:' + b[0]; r.sure = b[2];
+  if (b[1]) { r.opts = b[1]; r.c = 'sel'; } else { r.c = 'txt'; r.hint = NUM_TXT[r.l]; }
+}));
+const OPT_NOTE = 'Greyed fields are stored in the radio but not in your YAML file, so they cannot be shown or edited here.';
+let od = null;
+
+function openOptions() {
+  if (!S || !S.loaded) { setMsg('Read the radio or open a file first.', true); return; }
+  od = { tab: od ? od.tab : 'power', vals: Object.assign({}, S.model.settings), changed: {} };
+  $('#o-err').textContent = '';
+  renderOptions();
+  const d = $('#optdlg'); if (!d.open) d.showModal();
+}
+function oCtl(r) {
+  const ready = S.model.settings.dm32uvReady, dm = !!r.id && r.id.startsWith('dm:');
+  const live = !!r.id && !r.ro && (!dm || ready), v = r.id ? od.vals[r.id] : undefined;
+  const dis = !live ? 'disabled' : '';
+  if (r.c === 'chk') {
+    return live ? `<input type="checkbox" data-opt="${r.id}" ${v ? 'checked' : ''} aria-label="${esc(r.l)}">` : `<input type="checkbox" disabled data-ind="1" aria-label="${esc(r.l)} (not available)">`;
+  }
+  if (r.c === 'pw') {
+    const on = r.id ? `<input type="checkbox" disabled ${v ? 'checked' : ''} aria-label="${esc(r.l)} switch (view only)">` : `<input type="checkbox" disabled data-ind="1" aria-label="${esc(r.l)} switch (not stored in the file)">`;
+    return `<div class="ocheck" style="gap:8px">${on}<input type="text" disabled aria-label="${esc(r.l)}" style="width:150px"></div>`;
+  }
+  if (r.c === 'txt') {
+    const off = r.onlyWhen && od.vals[r.onlyWhen[0]] !== r.onlyWhen[1];
+    const dead = !(r.id && !off && (!r.id.startsWith('dm:') || S.model.settings.dm32uvReady));
+    return `<input type="text" ${dead ? 'disabled' : ''} ${r.id ? `data-opt="${r.id}" maxlength="14" value="${esc(v == null ? '' : v)}"` : ''} ${r.hint ? `title="Allowed: ${esc(r.hint)}" placeholder="${esc(r.hint)}"` : ''} aria-label="${esc(r.l)}" spellcheck="false">`;
+  }
+  // select
+  let opts, val;
+  if (r.opts) { opts = r.opts; val = r.bool ? String(!!v) : v; }
+  else if (r.id && v !== null && v !== undefined) { opts = [[v, v]]; val = v; }
+  else { opts = [['', '—']]; val = ''; }
+  const o = opts.map((x) => `<option value="${esc(x[0])}" ${String(x[0]) === String(val) ? 'selected' : ''}>${esc(x[1])}</option>`).join('');
+  return `<select ${dis} ${live ? `data-opt="${r.id}"${r.bool ? ' data-bool="1"' : ''}` : ''} aria-label="${esc(r.l)}${live ? '' : ' (not editable here)'}">${o}</select>`;
+}
+function oRow(r) {
+  const dm = !!r.id && r.id.startsWith('dm:');
+  const live = !!r.id && !r.ro && (!dm || S.model.settings.dm32uvReady);
+  const mark = (dm && live && r.sure && r.sure !== 'strong') ? `<span class="unc" title="Matches your factory CPS values, but the mapping is not confirmed on a radio yet (${r.sure} evidence).">?</span>` : '';
+  return `<label class="ol ${live || r.ro ? '' : 'dim'}">${esc(r.l)}${mark}</label><div class="oc">${oCtl(r)}</div>`;
+}
+function renderOptions() {
+  $('#o-tabs').innerHTML = OPT_TABS.map((t) => `<button class="otab" role="tab" data-otab="${t.k}" aria-selected="${t.k === od.tab}">${esc(t.t)}</button>`).join('');
+  const T = OPT_TABS.find((x) => x.k === od.tab);
+  let h;
+  if (T.two) {
+    const right = T.right.map((r) => { const dm = !!r.id && r.id.startsWith('dm:'), ok = dm && S.model.settings.dm32uvReady;
+      const mark = (ok && r.sure && r.sure !== 'strong') ? `<span class="unc" title="Matches your factory CPS values, but the mapping is not confirmed on a radio yet (${r.sure} evidence).">?</span>` : '';
+      return `<div class="oc">${oCtl(r)}</div><label class="ol" style="text-align:left">${esc(r.l)}${mark}</label>`; }).join('');
+    h = `<div class="oform two"><div class="ocol">${T.left.map(oRow).join('')}</div><div class="ocol checks">${right}</div></div>`;
+  } else if (T.groups) {
+    h = '<div class="ogroups">' + T.groups.map((col) => '<div class="ogcol">' + col.map((g) => `<fieldset class="ogroup"><legend>${esc(g[0])}</legend><div class="ochecks">${g[1].map((n) => `<label><input type="checkbox" disabled data-ind="1" aria-label="${esc(n)} (not stored in the file)">${esc(n)}</label>`).join('')}</div></fieldset>`).join('') + '</div>').join('') + '</div>';
+  } else {
+    h = `<div class="oform">${T.rows.map(oRow).join('')}</div>`;
+  }
+  const ready = S.model.settings.dm32uvReady;
+  const hasDm = [].concat(T.rows || [], T.left || [], T.right || []).some((r) => r.id && r.id.startsWith('dm:'));
+  let extra = '';
+  if (hasDm && !ready) extra = ' Fields on this tab that need the patched QDMR are greyed out: this file has no complete "settings: dm32uv:" section. Read the radio with the patched dmrconf, or open a YAML saved by it.';
+  else if (hasDm) extra = ' A "?" marks a setting whose mapping matches your factory CPS but has not been confirmed on a radio yet.';
+  h += `<p class="onote">${esc(T.note ? T.note + ' ' : '')}${esc(OPT_NOTE)}${esc(extra)}</p>`;
+  $('#o-panel').innerHTML = h;
+  $('#o-panel').querySelectorAll('[data-ind]').forEach((c) => { c.indeterminate = true; });
+}
+$('#o-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-otab]'); if (b) { od.tab = b.dataset.otab; renderOptions(); } });
+function oChange(e) {
+  const el = e.target, id = el.dataset.opt; if (!id) return;
+  const val = el.type === 'checkbox' ? el.checked : (el.dataset.bool ? el.value === 'true' : el.value);
+  od.vals[id] = val; od.changed[id] = val; $('#o-err').textContent = '';
+  if (id === 'bootDisplay') renderOptions();
+}
+$('#o-panel').addEventListener('change', oChange);
+$('#o-panel').addEventListener('input', (e) => { if (e.target.type === 'text') oChange(e); });
+function oClose() { const d = $('#optdlg'); if (d.open) d.close(); }
+$('#o-x').onclick = oClose; $('#o-cancel').onclick = oClose;
+$('#optdlg').addEventListener('cancel', () => { /* Esc closes without applying */ });
+$('#o-ok').onclick = async () => {
+  if (!Object.keys(od.changed).length) { oClose(); return; }
+  const r = await api('/api/settings/set', { changes: od.changed });
+  if (r.ok) { take(r); oClose(); setMsg('Option settings applied.'); render(); } else { $('#o-err').textContent = r.error || 'Could not apply the changes.'; }
+};
+
+// ---------- file buttons ----------
+$('#b-open').onclick = () => $('#filein').click();
+$('#filein').onchange = async () => {
+  const f = $('#filein').files[0]; $('#filein').value = ''; if (!f) return;
+  if (S && S.dirty && !await ask('Discard unsaved changes?', 'Opening a file replaces the codeplug you are editing.', 'Open file')) return;
+  const r = await api('/api/load', { text: await f.text(), name: f.name });
+  if (r.ok) { take(r); picked = null; setMsg(`Opened ${f.name}.`); } else setMsg(r.error, true);
+  render();
+};
+$('#b-save').onclick = async () => {
+  const r = await api('/api/save', {});
+  if (r.ok) { take(r); setMsg('Saved.'); render(); } else setMsg(r.error, true);
+};
+$('#b-saveas').onclick = async () => {
+  if (!S || !S.loaded) return setMsg('Nothing to save yet.', true);
+  const name = await ask('Save codeplug as', 'The file is saved in the Codeplug Studio data folder. .yaml is added if you leave it off.', 'Save', S.file);
+  if (!name) return;
+  const r = await api('/api/saveas', { name });
+  if (r.ok) { take(r); setMsg('Saved as ' + S.file + '.'); render(); } else setMsg(r.error, true);
+};
+document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#b-save').click(); } });
+
+// ---------- radio ----------
+function showLog(text) { $('#logtext').textContent = text || ''; $('#logpanel').classList.add('show'); }
+$('#b-log').onclick = () => showLog(S && S.log ? S.log : 'No radio activity yet.');
+$('#b-logclose').onclick = () => $('#logpanel').classList.remove('show');
+
+$('#b-read').onclick = async () => {
+  if (S && S.dirty && !await ask('Replace your unsaved edits?', 'Reading from the radio replaces the codeplug you are editing.', 'Read from radio')) return;
+  busy(true, 'Reading from the radio…', 'This can take a minute. Keep the radio connected.');
+  let r; try { r = await api('/api/read', {}); } catch (e) { r = { ok: false, error: 'Lost contact with the bridge.' }; }
+  busy(false);
+  if (r.ok) { take(r); picked = null; setMsg('Read complete. A copy was saved in backups.'); } else { setMsg(r.error, true); if (r.log) { if (S) S.log = r.log; showLog(r.log); } }
+  render();
+};
+$('#b-write').onclick = async () => {
+  if (!S || !S.loaded) return setMsg('Nothing to write yet.', true);
+  if (!await ask('Write to the radio?', 'First the radio\'s current contents are saved twice, as a YAML file and as a raw .bin, in ' + (S.backupDir || 'the backups folder') + '. Then the codeplug is checked against the radio\'s limits, then written. If any step fails, nothing is written. Do not unplug the radio or turn it off until this finishes. Test on a spare radio first if you can.', 'Write to radio')) return;
+  busy(true, 'Writing to the radio…', 'Saving backups, checking, then writing. Do not unplug the radio.');
+  let r; try { r = await api('/api/write', {}); } catch (e) { r = { ok: false, error: 'Lost contact with the bridge.' }; }
+  busy(false);
+  if (r.ok) { take(r); setMsg('Written. The radio\'s old contents are saved as ' + (r.backups ? r.backups.yaml + ' and ' + r.backups.bin : r.backup) + ' in ' + (S.backupDir || 'backups') + '.'); showLog(S.log); } else { setMsg(r.error, true); if (r.log) showLog(r.log); }
+  render();
+};
+
+// ---------- start ----------
+(async function init() {
+  let t = 'light'; try { t = localStorage.getItem('cps-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) {}
+  applyTheme(t);
+  try { S = await api('/api/state'); } catch (e) { S = null; }
+  render();
+})();
+</script>
+</body>
+</html>
