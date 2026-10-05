@@ -1,0 +1,29 @@
+# Radio data: never commit these. They contain your DMR ID, call sign, contacts, channel names,
+# encryption keys and the radio's calibration.
+*.bin
+*.yaml
+*.yml
+*.neonplug
+*.data
+*.codeplug
+backups/
+data/
+dm32-scan-*.json
+baseline-*.json
+log.json
+decoded*
+before-write-*
+after*
+
+# Python and build files
+__pycache__/
+*.pyc
+*.log
+build/
+.venv/
+
+# Editors and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
