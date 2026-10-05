@@ -57,8 +57,6 @@ DMR ID, call sign, contacts, channel names and possibly encryption keys. Check `
 - [NeonPlug](https://github.com/infamy/NeonPlug), MIT: used as a second reading of the settings block.
 - [ruamel.yaml](https://pypi.org/project/ruamel.yaml/), MIT: keeps QDMR's YAML tags and layout when Studio saves.
 
-**License of this repository:** choose **GPL-3.0** when you create it. It is required for the QDMR patches
-and keeps the repository simple. This is not legal advice.
 
 ## Contributing
 
