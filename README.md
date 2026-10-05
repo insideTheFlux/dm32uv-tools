@@ -10,7 +10,7 @@ mapping toolkit, patches for QDMR, and a browser-based codeplug editor.
 
 | Folder | What it is | Status |
 |---|---|---|
-| `dm32_tools/` | `dm32_read.py`: read-only reader (cannot write by construction). `mapbatch.py` + `whatchanged.py`: log which bytes move when you change a setting. `MAPPING_PLAN.md`: the plan. | Tested offline against a simulated radio and the official CPS's recorded traffic. **Not yet run on a real radio.** |
+| `dm32_tools/` | `dm32_read.py`: read-only reader (cannot write by construction). `mapbatch.py` + `whatchanged.py`: log which bytes move when you change a setting. `MAPPING_PLAN.md`: the plan. | Tested offline against a simulated radio and the official CPS's recorded traffic. On one real radio (firmware `DM32.00.01.048`) its read matched QDMR's byte for byte. `scan`, `--all` and the mapping steps are not yet tried on hardware. |
 | `qdmr_patch/` | A patch for [QDMR](https://github.com/hmatuschek/qdmr) that exports about 38 more DM-32UV settings, fixes several misread ones, shows write progress, and keeps channel settings QDMR does not model when it updates the radio. Notes in `STEP1.md`, `STEP2.md`, `PRESERVE.md`. | Built and tested on Linux against one dump. Built and ran on Windows (MSYS2); a write of one setting (time zone) was checked on the radio. |
 | `codeplug_studio/` | A local web page and small Python bridge that edits a QDMR YAML codeplug (channels, talk groups, zones, scan lists, many settings) and reads and writes the radio through `dmrconf`. Backs up before every write. | Used on one radio for a read and one write. Much of the editing was only tested in a simulated browser. |
 | `docs/` | Windows build guide for QDMR and a spreadsheet comparing QDMR, NeonPlug and the factory CPS settings. | |

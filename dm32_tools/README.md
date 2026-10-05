@@ -33,9 +33,12 @@ Closing the port at the end takes the radio out of programming mode.
 - Against the **real recorded traffic of the official CPS** (the `serial_capture_example.txt` file in the
   DM32-Protocol-Spec repository, firmware DM32.01.01.046): every frame the client sends is a frame the
   official CPS also sent, and the pages it returns are the bytes the real radio returned.
-- **Not tested:** a real radio and a real serial port. The delays come from the spec and NeonPlug.
-  Do the first-run comparison in `MAPPING_PLAN.md` section 0 before you rely on it. The `--all` option
-  has not been tried on hardware.
+- On **one real radio** (DM-32UV, firmware DM32.00.01.048, CH340 cable on Windows): a `read` followed by
+  `dmrconf --bin read`, with the radio untouched in between, compared with `whatchanged.py` gave
+  `0 byte(s) differ`. So the client reads exactly like QDMR on that radio.
+- **Not tested on hardware:** `scan`, `info` on other firmware, `--ids`, `--all`, `--delay-scale`, and radios
+  other than that one. The delays come from the spec and NeonPlug. Do the comparison in `MAPPING_PLAN.md`
+  section 0 on your own radio before you rely on it.
 
 Run the tests:
 ```
